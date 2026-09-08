@@ -15,7 +15,7 @@ const CATEGORY_ORDER: QuestionCategory[] = [
 ];
 
 const CATEGORY_HINTS: Record<QuestionCategory, string> = {
-  screening: 'Quick role-fit and motivation checks.',
+  screening: 'Quick role-fit check.',
   deep_technical: 'Trade-offs and decisions on the technologies this role needs.',
   gap_validation: 'Establishes whether an identified gap is real or simply unstated.',
   experience_validation: 'Verifies the claimed work is genuinely the candidate\u2019s own.',

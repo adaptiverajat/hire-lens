@@ -168,7 +168,7 @@ const graph = new StateGraph(State)
       userId: state.userId,
       excludeCandidateId: state.candidateId,
       ownerTypes: ['knowledge_entry', 'evaluation'],
-      limit: 6,
+      limit: 4,
     });
 
     return { evidence };
@@ -300,6 +300,39 @@ const graph = new StateGraph(State)
   })
 
   .addNode('synthesise_review', async (state) => {
+    const evaluation = state.evaluation!;
+    const redFlags = state.redFlags!;
+
+    // Optimization: when there are no red flags (GREEN), skip the LLM call and
+    // construct a default review packet from the evaluation + match analysis.
+    // The Human Review Agent adds the most value when there are flags to weigh.
+    if (redFlags.level === 'GREEN' && redFlags.flags.length === 0) {
+      const matchScore = state.matchSummary?.match_score ?? null;
+      const verdict = state.matchSummary?.verdict ?? null;
+      const recommendation =
+        evaluation.overall_rating >= 7 && (matchScore ?? 0) >= 60
+          ? 'advance'
+          : evaluation.overall_rating < 4 || (matchScore ?? 0) < 40
+            ? 'reject'
+            : 'hold';
+
+      const review: ReviewSynthesis = {
+        recommendation: recommendation as ReviewSynthesis['recommendation'],
+        confidence: 0.7,
+        headline: `${evaluation.overall_rating}/10 interview · ${matchScore ?? '—'}/100 match · no red flags`,
+        reasoning: `No inconsistencies detected between resume and interview. Interview rating ${evaluation.overall_rating}/10 (technical ${evaluation.technical_assessment.score}, communication ${evaluation.communication_assessment.score}). ${evaluation.rationale}`,
+        key_evidence: [
+          `Technical score: ${evaluation.technical_assessment.score}/10`,
+          `Communication score: ${evaluation.communication_assessment.score}/10`,
+          ...(evaluation.strengths.slice(0, 3).map((s) => `Strength: ${s}`)),
+        ],
+        open_questions: evaluation.weaknesses.slice(0, 3).map((w) => `Verify: ${w}`),
+        comparable_cases: [],
+      };
+
+      return { review };
+    }
+
     const review = await runReviewAgent({
       jobTitle: state.job!.title,
       jobSummary: jobSummary(state.job!),
@@ -423,11 +456,13 @@ export interface TranscriptReviewResult {
 export async function runTranscriptReview(input: {
   userId: string;
   transcriptId: string;
+  candidateId?: string;
 }): Promise<TranscriptReviewResult> {
   const timer = new NodeTimer();
   const runId = await startRun({
     workflow: 'transcript_review',
     userId: input.userId,
+    candidateId: input.candidateId ?? null,
     input: { transcript_id: input.transcriptId },
   });
 

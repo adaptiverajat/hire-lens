@@ -48,23 +48,25 @@ export async function runResumeAgent(input: { resume: string }): Promise<ResumeA
     runName: 'Resume Agent',
     system: SYSTEM,
     user: USER,
-    input: { resume: input.resume.slice(0, 24000) },
+    tier: 'fast',
+    maxTokens: 4000,
+    input: { resume: input.resume.slice(0, 12000) },
   });
 
   // Technologies named inside experience/projects are real signal, so fold them
   // into the skill list rather than losing them.
   const implied = new Set<string>();
-  for (const role of extraction.experience) {
-    role.technologies.forEach((t) => implied.add(t));
+  for (const role of extraction.experience ?? []) {
+    (role.technologies ?? []).forEach((t) => implied.add(t));
   }
-  for (const project of extraction.projects) {
-    project.technologies.forEach((t) => implied.add(t));
+  for (const project of extraction.projects ?? []) {
+    (project.technologies ?? []).forEach((t) => implied.add(t));
   }
 
   const seen = new Set<string>();
   const skillRows: ResumeAgentResult['skillRows'] = [];
 
-  for (const skill of extraction.skills) {
+  for (const skill of extraction.skills ?? []) {
     const normalised = normaliseSkill(skill.label);
     if (!normalised) continue;
 

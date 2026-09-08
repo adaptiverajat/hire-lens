@@ -174,6 +174,55 @@ export const gapAnalysisSchema = z.object({
 
 export type GapAnalysis = z.infer<typeof gapAnalysisSchema>;
 
+// --- Feature 3+4 combined: Gap Analysis + Question Generation ---------------
+
+export const analysisAndQuestionsSchema = z.object({
+  match_score: z.number().describe('0-100 weighted by requirement importance'),
+  verdict: z.enum(['strong_match', 'partial_match', 'weak_match']),
+  strong_skills: z.array(
+    z.object({
+      skill: z.string(),
+      evidence: z.string(),
+      importance: z.number(),
+    })
+  ),
+  missing_skills: z.array(
+    z.object({
+      skill: z.string(),
+      importance: z.number(),
+      severity: z.enum(['low', 'medium', 'high']),
+    })
+  ),
+  partial_skills: z.array(
+    z.object({
+      skill: z.string(),
+      note: z.string().describe('Why this is only a partial match'),
+    })
+  ),
+  areas_to_validate: z.array(
+    z.object({
+      area: z.string(),
+      why: z.string(),
+      suggested_focus: z.string(),
+    })
+  ),
+  summary: z.string(),
+  questions: z.array(
+    z.object({
+      category: z.enum(QUESTION_CATEGORIES),
+      question: z.string(),
+      rationale: z.string().describe('Why ask this candidate this question'),
+      expected_signals: z
+        .array(z.string())
+        .describe('Concrete keywords/concepts a strong answer contains'),
+      target_skill: z.string().nullable(),
+      difficulty: z.enum(['easy', 'medium', 'hard']),
+    })
+  ),
+});
+
+export type AnalysisAndQuestions = z.infer<typeof analysisAndQuestionsSchema>;
+
 // --- Feature 4: Question generation ----------------------------------------
 
 export const questionGenerationSchema = z.object({

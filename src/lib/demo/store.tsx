@@ -14,10 +14,17 @@ export interface PromptOverride {
   user: string;
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 export interface CandidateAgentLog {
   agent: string;
   status: 'running' | 'complete' | 'failed';
   timestamp: number;
+  tokenUsage?: TokenUsage;
 }
 
 export interface CandidateLogEntry {
@@ -72,7 +79,7 @@ interface DemoContextValue {
   resetPrompt: (agent: string) => void;
   markAgentComplete: (agent: string) => void;
   resetCompletedAgents: () => void;
-  logCandidateAgent: (candidateId: string, name: string, agent: string, status: 'running' | 'complete' | 'failed') => void;
+  logCandidateAgent: (candidateId: string, name: string, agent: string, status: 'running' | 'complete' | 'failed', tokenUsage?: TokenUsage) => void;
   setCandidateName: (candidateId: string, name: string) => void;
   clearCandidateLogs: () => void;
 }
@@ -126,7 +133,7 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
     setState((prev) => {
       const LIFECYCLE = [
         'JD Agent', 'Resume Agent', 'Evidence Retrieval Agent',
-        'Gap Analysis Agent', 'Question Agent', 'Transcript Evaluation Agent',
+        'Gap Analysis + Question Agent', 'Transcript Evaluation Agent',
         'Red Flag Agent', 'Human Review Agent',
       ];
       let completed = prev.completedAgents;
@@ -153,7 +160,7 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
   }, []);
 
   const logCandidateAgent = useCallback(
-    (candidateId: string, name: string, agent: string, status: 'running' | 'complete' | 'failed') => {
+    (candidateId: string, name: string, agent: string, status: 'running' | 'complete' | 'failed', tokenUsage?: TokenUsage) => {
       setState((prev) => {
         const existing = prev.candidateLogs[candidateId] ?? {
           candidateId,
@@ -165,13 +172,22 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
         // Lifecycle order — each agent implicitly means all prior agents ran.
         const LIFECYCLE = [
           'JD Agent', 'Resume Agent', 'Evidence Retrieval Agent',
-          'Gap Analysis Agent', 'Question Agent', 'Transcript Evaluation Agent',
+          'Gap Analysis + Question Agent', 'Transcript Evaluation Agent',
           'Red Flag Agent', 'Human Review Agent',
         ];
 
-        // Replace any existing entry for the same agent.
+        // Replace any existing entry for the same agent, but accumulate token
+        // usage across runs so re-parsing/re-analysing adds to the total.
+        const priorAgentLog = existing.agents.find((a) => a.agent === agent);
         const agents = existing.agents.filter((a) => a.agent !== agent);
-        agents.push({ agent, status, timestamp: Date.now() });
+        const accumulatedUsage = priorAgentLog?.tokenUsage && tokenUsage
+          ? {
+              promptTokens: priorAgentLog.tokenUsage.promptTokens + tokenUsage.promptTokens,
+              completionTokens: priorAgentLog.tokenUsage.completionTokens + tokenUsage.completionTokens,
+              totalTokens: priorAgentLog.tokenUsage.totalTokens + tokenUsage.totalTokens,
+            }
+          : tokenUsage ?? priorAgentLog?.tokenUsage;
+        agents.push({ agent, status, timestamp: Date.now(), tokenUsage: accumulatedUsage });
 
         // Dependency inference: if this agent completed, all prior lifecycle
         // agents must have run too. Force-mark them complete if not already.

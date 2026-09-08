@@ -28,6 +28,7 @@ interface Trace {
   candidateId?: string;
   jobId?: string;
   timestamp: number;
+  tokenUsage?: Record<string, { promptTokens: number; completionTokens: number; totalTokens: number }>;
 }
 
 /** Masks a candidate name when demo is enabled, always camel-cases. */
@@ -89,6 +90,34 @@ export function UnderTheHood() {
     return () => { cancelled = true; };
   }, [currentCandidateId, demo.state.candidateLogs]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch names for ALL candidates in the logs that still have "Unknown candidate".
+  // This ensures workflow path titles show real names, not alphanumeric IDs.
+  useEffect(() => {
+    if (!demo.state.enabled) return;
+    const entries = Object.values(demo.state.candidateLogs);
+    const unknown = entries.filter(
+      (e) => (!e.name || e.name === 'Unknown candidate') && e.candidateId,
+    );
+    if (unknown.length === 0) return;
+
+    let cancelled = false;
+    for (const entry of unknown) {
+      api
+        .get<{ full_name: string }>(`/candidates/${entry.candidateId}`)
+        .then((res) => {
+          if (cancelled) return;
+          const name = res.full_name ?? 'Unknown candidate';
+          if (name !== 'Unknown candidate') {
+            demo.setCandidateName(entry.candidateId, name);
+          }
+        })
+        .catch(() => {
+          // Best-effort — leave as Unknown candidate.
+        });
+    }
+    return () => { cancelled = true; };
+  }, [demo.state.enabled, demo.state.candidateLogs]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -117,11 +146,14 @@ export function UnderTheHood() {
         if (detail.type === 'start') {
           d.logCandidateAgent(detail.candidateId, '', detail.agent, 'running');
         } else {
+          // Extract this agent's token usage from the trace event.
+          const agentUsage = detail.tokenUsage?.[detail.agent];
           d.logCandidateAgent(
             detail.candidateId,
             '',
             detail.agent,
             detail.error ? 'failed' : 'complete',
+            agentUsage,
           );
           if (!detail.error) {
             d.markAgentComplete(detail.agent);
@@ -142,7 +174,7 @@ export function UnderTheHood() {
   // the candidate.
   const LIFECYCLE_ORDER = [
     'JD Agent', 'Resume Agent', 'Evidence Retrieval Agent',
-    'Gap Analysis Agent', 'Question Agent', 'Transcript Evaluation Agent',
+    'Gap Analysis + Question Agent', 'Transcript Evaluation Agent',
     'Red Flag Agent', 'Human Review Agent',
   ];
 
@@ -217,6 +249,38 @@ export function UnderTheHood() {
     });
   }, [inferredLogs]);
 
+  // Aggregate token usage across all candidates, grouped by agent.
+  const { tokenByAgentAcrossAll, totalTokensAcrossAllCandidates } = useMemo(() => {
+    const byAgent = new Map<string, { promptTokens: number; completionTokens: number; totalTokens: number }>();
+    let total = 0;
+    for (const entry of inferredLogs) {
+      for (const a of entry.agents) {
+        if (!a.tokenUsage) continue;
+        const existing = byAgent.get(a.agent);
+        if (existing) {
+          existing.promptTokens += a.tokenUsage.promptTokens;
+          existing.completionTokens += a.tokenUsage.completionTokens;
+          existing.totalTokens += a.tokenUsage.totalTokens;
+        } else {
+          byAgent.set(a.agent, { ...a.tokenUsage });
+        }
+        total += a.tokenUsage.totalTokens;
+      }
+    }
+    return { tokenByAgentAcrossAll: byAgent, totalTokensAcrossAllCandidates: total };
+  }, [inferredLogs]);
+
+  // The currently executing workflow — a candidate that has at least one
+  // agent in 'running' state. Falls back to the most recently updated
+  // candidate if nothing is actively running.
+  const currentWorkflowEntry = useMemo(() => {
+    if (allCandidateStatus.length === 0) return null;
+    const running = allCandidateStatus.find((c) =>
+      Object.values(c.status).some((s) => s === 'running'),
+    );
+    return running ?? allCandidateStatus[0];
+  }, [allCandidateStatus]);
+
   // The active agent for the prompt selector — first running agent, or first completed.
   const activeAgent = useMemo(() => {
     for (const agent of LIFECYCLE_ORDER) {
@@ -251,6 +315,7 @@ export function UnderTheHood() {
   if (!demo.state.enabled) return null;
 
   return (
+    <>
     <Card id="demo-under-the-hood-card" className="mt-8 border-primary/20 shadow-sm">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
@@ -273,34 +338,89 @@ export function UnderTheHood() {
 
       {!minimized && (
         <CardContent className="space-y-4">
-          <section id="under-the-hood-workflow">
-            {allCandidateStatus.length === 0 ? (
-              <WorkflowPath
-                stages={stages}
-                agentStatus={{}}
-                onSelect={setSelectedAgent}
-              />
-            ) : (
-              <div id="workflow-path-stack" className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-                {allCandidateStatus.map((c) => (
-                  <WorkflowPath
-                    key={c.candidateId}
-                    stages={stages}
-                    agentStatus={c.status}
-                    title={c.name && c.name !== 'Unknown candidate' ? displayName(c.name, demo.state.enabled) : c.candidateId.slice(0, 8)}
-                    onSelect={setSelectedAgent}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-
           <div className="grid gap-4 lg:grid-cols-3">
+            <section id="under-the-hood-token-usage" className="lg:col-span-3">
+              <div className="mb-2 flex items-center gap-2">
+                <h3 className="text-sm font-medium">Token usage</h3>
+                <Badge variant="outline" className="text-[10px] font-mono">
+                  {totalTokensAcrossAllCandidates > 0
+                    ? `${totalTokensAcrossAllCandidates.toLocaleString()} total`
+                    : 'no data yet'}
+                </Badge>
+              </div>
+              {tokenByAgentAcrossAll.size > 0 ? (
+                <div className="rounded-md border border-border/60 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Agent</th>
+                        <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">Prompt</th>
+                        <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">Completion</th>
+                        <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from(tokenByAgentAcrossAll.entries())
+                        .sort((a, b) => b[1].totalTokens - a[1].totalTokens)
+                        .map(([agent, u]) => (
+                          <tr key={agent} className="border-b last:border-0">
+                            <td className="px-3 py-1.5 font-medium">{agent}</td>
+                            <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{u.promptTokens.toLocaleString()}</td>
+                            <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{u.completionTokens.toLocaleString()}</td>
+                            <td className="px-3 py-1.5 text-right font-mono font-semibold">{u.totalTokens.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      <tr className="bg-muted/30">
+                        <td className="px-3 py-1.5 font-semibold">Total</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                          {Array.from(tokenByAgentAcrossAll.values()).reduce((s, u) => s + u.promptTokens, 0).toLocaleString()}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                          {Array.from(tokenByAgentAcrossAll.values()).reduce((s, u) => s + u.completionTokens, 0).toLocaleString()}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono font-bold">
+                          {totalTokensAcrossAllCandidates.toLocaleString()}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground/60">
+                  Token usage will appear here after you run any agent (parse a job description,
+                  parse a resume, analyse a candidate, or evaluate a transcript).
+                </p>
+              )}
+            </section>
+
+            <section id="under-the-hood-current-workflow" className="lg:col-span-3">
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                <Activity className="h-4 w-4" />
+                Current workflow
+              </div>
+              {currentWorkflowEntry ? (
+                <WorkflowPath
+                  stages={stages}
+                  agentStatus={currentWorkflowEntry.status}
+                  title={currentWorkflowEntry.name && currentWorkflowEntry.name !== 'Unknown candidate'
+                    ? displayName(currentWorkflowEntry.name, demo.state.enabled)
+                    : currentWorkflowEntry.candidateId.slice(0, 8)}
+                  onSelect={setSelectedAgent}
+                />
+              ) : (
+                <WorkflowPath
+                  stages={stages}
+                  agentStatus={{}}
+                  onSelect={setSelectedAgent}
+                />
+              )}
+            </section>
+
             <section id="under-the-hood-agent-runs" className="lg:col-span-1">
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Activity className="h-4 w-4" />
-                  Agent runs by candidate
+                  Log: Agent runs per candidate
                 </div>
                 {inferredLogs.length > 0 && (
                   <Button
@@ -332,9 +452,16 @@ export function UnderTheHood() {
                           <p className="text-xs font-semibold text-foreground">
                             {displayName(entry.name, demo.state.enabled)}
                           </p>
-                          <span className="font-mono text-[9px] text-muted-foreground/60">
-                            {new Date(entry.updatedAt).toLocaleTimeString()}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {entry.agents.some((a) => a.tokenUsage) && (
+                              <span className="font-mono text-[9px] text-muted-foreground/70">
+                                {entry.agents.reduce((sum, a) => sum + (a.tokenUsage?.totalTokens ?? 0), 0).toLocaleString()} tok
+                              </span>
+                            )}
+                            <span className="font-mono text-[9px] text-muted-foreground/60">
+                              {new Date(entry.updatedAt).toLocaleTimeString()}
+                            </span>
+                          </div>
                         </div>
                         <ul className="space-y-1">
                           {entry.agents.map((agentLog) => (
@@ -440,6 +567,40 @@ export function UnderTheHood() {
         </CardContent>
       )}
     </Card>
+
+    <Card id="demo-workflow-paths-card" className="mt-4 border-primary/20 shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Cpu className="h-4 w-4 text-primary" />
+          Agent runs per candidate
+          <Badge variant="secondary" className="ml-auto font-mono text-[10px]">
+            DEMO
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <section id="under-the-hood-workflow-stack">
+          {allCandidateStatus.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No workflow paths yet. Run any agent to see candidate workflows here.
+            </p>
+          ) : (
+            <div id="workflow-path-stack" className="space-y-3 pr-1">
+              {allCandidateStatus.map((c) => (
+                <WorkflowPath
+                  key={c.candidateId}
+                  stages={stages}
+                  agentStatus={c.status}
+                  title={c.name && c.name !== 'Unknown candidate' ? displayName(c.name, demo.state.enabled) : c.candidateId.slice(0, 8)}
+                  onSelect={setSelectedAgent}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </CardContent>
+    </Card>
+    </>
   );
 }
 
@@ -463,6 +624,11 @@ function AgentStatusRow({ agentLog }: { agentLog: CandidateAgentLog }) {
       )}>
         {agentLog.agent}
       </span>
+      {agentLog.tokenUsage && (
+        <span className="font-mono text-[9px] text-muted-foreground/70" title={`Prompt: ${agentLog.tokenUsage.promptTokens} · Completion: ${agentLog.tokenUsage.completionTokens}`}>
+          {agentLog.tokenUsage.totalTokens.toLocaleString()} tok
+        </span>
+      )}
       <span className="ml-auto font-mono text-[9px] text-muted-foreground/50">
         {new Date(agentLog.timestamp).toLocaleTimeString()}
       </span>

@@ -65,6 +65,27 @@ export default function AboutPage() {
               <strong>Learning knowledge base</strong> — stores past evaluations and interview
               assessments for RAG-driven grounding of future recommendations.
             </li>
+            <li>
+              <strong>Pre-interview export</strong> — generates a printable PDF report per candidate
+              with match analysis, strong areas, gaps, interview questions, and &quot;look for&quot;
+              signals before the interview.
+            </li>
+            <li>
+              <strong>Post-interview email export</strong> — selects multiple candidates across jobs
+              and generates a formatted email report with final decisions, reasoning, agent ratings,
+              and red flags. Colour-coded decisions (green/Selected, red/Rejected, orange/On Hold)
+              with HTML formatting copied to clipboard.
+            </li>
+            <li>
+              <strong>Candidate deletion</strong> — permanently removes a candidate and all
+              associated data (resume, analysis, interviews, evaluations, flags) when a profile was
+              uploaded to the wrong job.
+            </li>
+            <li>
+              <strong>Token usage tracking</strong> — captures per-agent OpenAI token usage
+              (prompt, completion, total) for every LLM call and displays it in the Under the Hood
+              section, aggregated per candidate and per agent.
+            </li>
           </ul>
           <p>
             Every AI output is advisory. A human always makes the final call, and every override
@@ -164,20 +185,12 @@ export default function AboutPage() {
             </div>
 
             <div>
-              <h3 className="font-medium text-foreground">Gap Analysis Agent</h3>
+              <h3 className="font-medium text-foreground">Gap Analysis + Question Agent</h3>
               <p className="text-sm">
-                Compares a job&apos;s requirements against the candidate&apos;s profile. Produces a
-                match score, verdict, strong skills, missing skills, partial matches, and areas to
-                validate, anchored to a deterministic weighted-coverage signal.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-medium text-foreground">Question Agent</h3>
-              <p className="text-sm">
-                Generates a tailored interview question set for a specific candidate and job.
-                Includes screening, deep-technical, gap-validation, and experience-validation
-                questions, each with expected signals and rationale.
+                Compares a job&apos;s requirements against the candidate&apos;s profile and generates
+                a tailored interview question set in a single pass. Produces a match score, verdict,
+                strong skills, missing skills, partial matches, areas to validate, and candidate-specific
+                questions with expected signals and rationale.
               </p>
             </div>
 
@@ -241,6 +254,40 @@ export default function AboutPage() {
             Vector indexes for job descriptions, resumes, questions, and evaluations feed the
             Evidence Retrieval Agent, giving the system an explicit memory of past decisions.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card id="about-observability-card">
+        <CardHeader>
+          <CardTitle>Under the Hood: observability</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            The <strong>Under the Hood</strong> panel (visible on every page when demo mode is
+            enabled) provides real-time visibility into the agentic AI pipeline.
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              <strong>Agent Runs per candidate</strong> — one stacked workflow per candidate, showing each
+              agent in lifecycle order with live status (running, complete, failed). Completed
+              agents turn green with check marks; running agents show spinners.
+            </li>
+            <li>
+              <strong>Agent runs by candidate</strong> — a per-candidate breakdown of every agent
+              that has run, with timestamps and status indicators.
+            </li>
+            <li>
+              <strong>Token usage</strong> — each agent row shows its OpenAI token consumption
+              (prompt, completion, total). Each candidate header shows the aggregate token total
+              across all agents. Token data is captured via LangChain callbacks and flows through
+              the API response to the UI without changing any agent or graph function signatures.
+            </li>
+            <li>
+              <strong>Prompt editor</strong> — view and override the system and user prompts for
+              each agent at runtime, so you can experiment with prompt engineering without
+              redeploying.
+            </li>
+          </ul>
         </CardContent>
       </Card>
     </div>

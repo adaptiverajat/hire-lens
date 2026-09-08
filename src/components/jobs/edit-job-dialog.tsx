@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 export function EditJobDialog({
   jobId,
@@ -26,6 +27,7 @@ export function EditJobDialog({
   location,
   deadlineDate,
   priority,
+  descriptionRaw,
 }: {
   jobId: string;
   title: string;
@@ -33,6 +35,7 @@ export function EditJobDialog({
   location: string | null;
   deadlineDate: string | null;
   priority: 'normal' | 'urgent';
+  descriptionRaw: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -46,19 +49,32 @@ export function EditJobDialog({
     deadlineDate ? deadlineDate.split('T')[0] : ''
   );
   const [editUrgent, setEditUrgent] = useState(priority === 'urgent');
+  const [editDescription, setEditDescription] = useState(descriptionRaw ?? '');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setPending(true);
     try {
-      await api.patch(`/jobs/${jobId}`, {
+      const body: Record<string, unknown> = {
         title: editTitle.trim(),
         department: editDepartment.trim() || null,
         location: editLocation.trim() || null,
         deadline_date: editDeadline ? new Date(editDeadline).toISOString() : null,
         priority: editUrgent ? 'urgent' : 'normal',
-      });
-      toast.success('Job updated');
+      };
+
+      // Only send description_raw if it changed — updating it resets
+      // parse_status to 'pending' and clears the structured extraction.
+      if (editDescription.trim() !== (descriptionRaw ?? '').trim()) {
+        body.description_raw = editDescription.trim();
+      }
+
+      await api.patch(`/jobs/${jobId}`, body);
+      toast.success(
+        body.description_raw
+          ? 'Job updated. Re-parse to extract new requirements.'
+          : 'Job updated'
+      );
       setOpen(false);
       startTransition(() => router.refresh());
     } catch (error) {
@@ -78,11 +94,11 @@ export function EditJobDialog({
           </Button>
         }
       />
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit job</DialogTitle>
           <DialogDescription>
-            Update the role details. This does not re-parse the description.
+            Update the role details. Editing the description resets parsing — run Re-parse after saving.
           </DialogDescription>
         </DialogHeader>
 
@@ -96,6 +112,23 @@ export function EditJobDialog({
               required
               maxLength={200}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-description">Job description</Label>
+            <Textarea
+              id="edit-description"
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              rows={8}
+              placeholder="Paste the full job description..."
+              className="max-h-64 overflow-y-auto text-sm"
+            />
+            {editDescription.trim() !== (descriptionRaw ?? '').trim() && (
+              <p className="text-xs text-amber-600">
+                Saving will reset the parsed requirements. Use Re-parse after saving.
+              </p>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

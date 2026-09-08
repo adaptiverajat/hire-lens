@@ -33,7 +33,7 @@ export async function runEvidenceAgent(input: {
       userId: input.userId,
       ownerTypes: input.ownerTypes ?? ['knowledge_entry', 'evaluation'],
       excludeCandidateId: input.excludeCandidateId ?? null,
-      limit: input.limit ?? 6,
+      limit: input.limit ?? 4,
       minSimilarity: 0.2,
     });
   } catch (error) {
@@ -62,7 +62,7 @@ export function formatEvidence(items: EvidenceItem[]): string {
   return items
     .map((item, index) => {
       const outcome = item.outcome ? ` | recorded outcome: ${item.outcome}` : '';
-      const body = item.content.slice(0, 1200);
+      const body = item.content.slice(0, 800);
       return `Case ${index + 1} (similarity ${item.similarity}${outcome})\nTitle: ${item.title}\n${body}`;
     })
     .join('\n\n');

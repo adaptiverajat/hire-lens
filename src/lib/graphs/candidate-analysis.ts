@@ -1,8 +1,7 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import type { GapAnalysis, JdExtraction, QuestionGeneration, ResumeExtraction } from '@/lib/agents/schemas';
 import { runEvidenceAgent, type EvidenceItem } from '@/lib/agents/evidence-agent';
-import { runGapAnalysisAgent } from '@/lib/agents/gap-analysis-agent';
-import { runQuestionAgent } from '@/lib/agents/question-agent';
+import { runAnalysisAndQuestionsAgent } from '@/lib/agents/analysis-questions-agent';
 import { candidateHistoryText } from '@/lib/domain/format';
 import type { CandidateSkillRow, JobSkillRow } from '@/lib/domain/matching';
 import { indexDocument } from '@/lib/ai/vector-store';
@@ -116,17 +115,17 @@ const graph = new StateGraph(State)
       userId: state.userId,
       excludeCandidateId: state.candidateId,
       ownerTypes: ['knowledge_entry', 'evaluation'],
-      limit: 6,
+      limit: 4,
     });
 
     return { evidence };
   })
 
-  .addNode('gap_analysis', async (state) => {
+  .addNode('analyze_and_question', async (state) => {
     const job = state.job!;
     const candidate = state.candidate!;
 
-    const { analysis, coverageScore } = await runGapAnalysisAgent({
+    const { analysis, coverageScore, questions } = await runAnalysisAndQuestionsAgent({
       jobTitle: job.title,
       jobSummary: jobSummary(job),
       jobSkills: state.jobSkills,
@@ -139,7 +138,7 @@ const graph = new StateGraph(State)
       evidence: state.evidence,
     });
 
-    return { gap: analysis, coverageScore };
+    return { gap: analysis, coverageScore, questions: { questions } };
   })
 
   .addNode('persist_analysis', async (state) => {
@@ -175,25 +174,6 @@ const graph = new StateGraph(State)
       .eq('status', 'new');
 
     return { matchAnalysisId: data.id as string };
-  })
-
-  .addNode('generate_questions', async (state) => {
-    const job = state.job!;
-    const candidate = state.candidate!;
-
-    const questions = await runQuestionAgent({
-      jobTitle: job.title,
-      jobSummary: jobSummary(job),
-      requirements: state.jobSkills.map((s) => s.skill),
-      candidateName: candidate.full_name,
-      candidateHeadline: candidate.headline,
-      candidateSkills: state.candidateSkills.map((s) => s.skill),
-      candidateHistory: candidateHistoryText(candidate.structured),
-      gap: state.gap!,
-      evidence: state.evidence,
-    });
-
-    return { questions };
   })
 
   .addNode('persist_questions', async (state) => {
@@ -259,10 +239,9 @@ const graph = new StateGraph(State)
 
   .addEdge(START, 'load')
   .addEdge('load', 'retrieve_evidence')
-  .addEdge('retrieve_evidence', 'gap_analysis')
-  .addEdge('gap_analysis', 'persist_analysis')
-  .addEdge('persist_analysis', 'generate_questions')
-  .addEdge('generate_questions', 'persist_questions')
+  .addEdge('retrieve_evidence', 'analyze_and_question')
+  .addEdge('analyze_and_question', 'persist_analysis')
+  .addEdge('persist_analysis', 'persist_questions')
   .addEdge('persist_questions', END);
 
 export const candidateAnalysisGraph = graph.compile();

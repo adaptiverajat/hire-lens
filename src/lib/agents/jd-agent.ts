@@ -60,9 +60,11 @@ export async function runJdAgent(input: {
     runName: 'JD Agent',
     system: SYSTEM,
     user: USER,
+    tier: 'fast',
+    maxTokens: 3000,
     input: {
       title: input.title || 'not supplied',
-      description: input.description.slice(0, 24000),
+      description: input.description.slice(0, 12000),
     },
   });
 
@@ -70,7 +72,7 @@ export async function runJdAgent(input: {
   const seen = new Set<string>();
   const skillRows: JdAgentResult['skillRows'] = [];
 
-  for (const requirement of extraction.requirements) {
+  for (const requirement of extraction.requirements ?? []) {
     const skill = normaliseSkill(requirement.label);
     if (!skill) continue;
 

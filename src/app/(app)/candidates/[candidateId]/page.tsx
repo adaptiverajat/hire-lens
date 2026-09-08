@@ -183,10 +183,7 @@ export default async function CandidatePage({ params }: Props) {
               Questions
               {(questionSets.data ?? []).length > 0 && (
                 <span className="ml-1.5 text-xs text-muted-foreground">
-                  {((questionSets.data ?? []) as QuestionSetRow[]).reduce(
-                    (n, s) => n + (s.questions?.length ?? 0),
-                    0
-                  )}
+                  {((questionSets.data ?? []) as QuestionSetRow[])[0]?.questions?.length ?? 0}
                 </span>
               )}
             </TabsTrigger>

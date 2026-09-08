@@ -110,8 +110,15 @@ function buildPostInterviewBody(
       let decisionSource: string;
       let detail: string;
 
-      // Camel-case a decision string
+      // Camel-case a decision string, with display overrides
+      const DECISION_LABELS: Record<string, string> = {
+        reject: 'Rejected',
+        advance: 'Selected',
+        hold: 'On Hold',
+        hire: 'Hired',
+      };
       const camel = (s: string) =>
+        DECISION_LABELS[s.toLowerCase()] ??
         s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
       // Determine color: red for reject, green for advance/selected/hire (not lean hire), orange for anything else
@@ -292,7 +299,15 @@ function buildPostInterviewText(
       const latestFeedback = c.feedback[0] ?? null;
       const latestEval = c.evaluations[0] ?? null;
 
-      const camel = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+      const DECISION_LABELS: Record<string, string> = {
+        reject: 'Rejected',
+        advance: 'Selected',
+        hold: 'On Hold',
+        hire: 'Hired',
+      };
+      const camel = (s: string) =>
+        DECISION_LABELS[s.toLowerCase()] ??
+        s.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
       const colorFor = (d: string): string => {
         const lower = d.toLowerCase();
         if (lower.includes('reject') || lower.includes('no hire')) return 'red';

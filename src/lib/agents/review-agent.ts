@@ -102,6 +102,7 @@ export async function runReviewAgent(input: {
     runName: 'Human Review Agent',
     system: SYSTEM,
     user: USER,
+    maxTokens: 1500,
     input: {
       jobTitle: input.jobTitle,
       jobSummary: input.jobSummary,

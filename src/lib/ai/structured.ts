@@ -2,6 +2,7 @@ import type { z } from 'zod';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { chatModel } from '@/lib/ai/models';
 import { getDemoContext } from '@/lib/demo/server-store';
+import { recordTokenUsage, type TokenUsage } from '@/lib/ai/token-usage';
 
 /**
  * Runs a prompt and validates the model's reply against a Zod schema using
@@ -16,6 +17,7 @@ export async function generateStructured<T extends z.ZodType>({
   input,
   tier = 'reasoning',
   temperature = 0.2,
+  maxTokens,
   runName,
 }: {
   schema: T;
@@ -25,6 +27,7 @@ export async function generateStructured<T extends z.ZodType>({
   input: Record<string, unknown>;
   tier?: 'reasoning' | 'fast';
   temperature?: number;
+  maxTokens?: number;
   runName?: string;
 }): Promise<z.infer<T>> {
   const demo = getDemoContext();
@@ -39,14 +42,33 @@ export async function generateStructured<T extends z.ZodType>({
     ['human', resolvedUser],
   ]);
 
-  const model = chatModel(tier, temperature).withStructuredOutput(schema, {
+  // Use includeRaw: true so we get the raw AIMessage alongside the parsed
+  // structured output. The AIMessage carries usage_metadata with token counts.
+  const model = chatModel(tier, temperature, maxTokens).withStructuredOutput(schema, {
     name: schemaName,
     strict: true,
+    includeRaw: true,
   });
 
   const chain = prompt.pipe(model);
 
-  return (await chain.invoke(input, {
+  const response = (await chain.invoke(input, {
     runName: activeRun,
-  })) as z.infer<T>;
+  })) as unknown as { raw: { usage_metadata?: { input_tokens: number; output_tokens: number; total_tokens: number } }; parsed: z.infer<T> };
+
+  // Extract token usage from the raw AIMessage's usage_metadata.
+  const usage = response.raw?.usage_metadata;
+  if (usage) {
+    const tokenUsage: TokenUsage = {
+      promptTokens: usage.input_tokens ?? 0,
+      completionTokens: usage.output_tokens ?? 0,
+      totalTokens: usage.total_tokens ?? (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0),
+    };
+    recordTokenUsage(activeRun, tokenUsage);
+    console.log(`[token-usage] ${activeRun}: ${tokenUsage.promptTokens} prompt + ${tokenUsage.completionTokens} completion = ${tokenUsage.totalTokens} total`);
+  } else {
+    console.log(`[token-usage] ${activeRun}: no usage_metadata on raw message`);
+  }
+
+  return response.parsed;
 }

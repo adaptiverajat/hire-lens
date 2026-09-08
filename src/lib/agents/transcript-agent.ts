@@ -85,6 +85,7 @@ export async function runTranscriptAgent(input: {
     runName: 'Transcript Evaluation Agent',
     system: SYSTEM,
     user: USER,
+    maxTokens: 4000,
     input: {
       jobTitle: input.jobTitle,
       jobSummary: input.jobSummary,
@@ -93,7 +94,7 @@ export async function runTranscriptAgent(input: {
       candidateSummary: input.candidateSummary,
       questions,
       participants: input.participants.join(', ') || 'not identified',
-      transcript: input.transcript.slice(0, 40000),
+      transcript: input.transcript.slice(0, 24000),
       evidence: formatEvidence(input.evidence),
     },
   });

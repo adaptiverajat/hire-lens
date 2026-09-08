@@ -30,7 +30,7 @@ type ModelTier = 'reasoning' | 'fast';
  * Chat model factory. `useResponsesApi` routes calls through the OpenAI
  * Responses API rather than Chat Completions.
  */
-export function chatModel(tier: ModelTier = 'reasoning', temperature = 0.2) {
+export function chatModel(tier: ModelTier = 'reasoning', temperature = 0.2, maxTokens?: number) {
   configureTracing();
   const env = serverEnv();
   const demo = getDemoContext();
@@ -44,6 +44,7 @@ export function chatModel(tier: ModelTier = 'reasoning', temperature = 0.2) {
     apiKey,
     model: tier === 'fast' ? env.OPENAI_FAST_MODEL : env.OPENAI_CHAT_MODEL,
     temperature,
+    maxTokens,
     useResponsesApi: true,
     maxRetries: 2,
   });

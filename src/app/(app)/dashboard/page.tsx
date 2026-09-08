@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AlertCircle, Briefcase, Layers, ShieldAlert, Users } from 'lucide-react';
+import { AlertCircle, Briefcase, Cpu, Gauge, Layers } from 'lucide-react';
 import { maskName } from '@/lib/utils/mask';
 import { getDemoEnabled } from '@/lib/demo/server-store';
 import { PageHeader } from '@/components/shared/page-header';
@@ -8,6 +8,7 @@ import { ButtonLink } from '@/components/shared/button-link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { totalTokensFromUsage } from '@/lib/ai/token-usage';
 
 export const metadata = { title: 'Dashboard - HireLens' };
 
@@ -37,23 +38,26 @@ export default async function DashboardPage() {
 
   const jobIds = (jobs ?? []).map((j) => j.id);
 
-  const [candidates, flags, runs] = await Promise.all([
+  const [candidates, runs] = await Promise.all([
     jobIds.length
       ? db.from('candidates').select('id, full_name, status, job_id').in('job_id', jobIds)
       : Promise.resolve({ data: [] as Array<{ id: string; full_name: string; status: string; job_id: string }> }),
-    jobIds.length
-      ? db.from('flags').select('level, status').in('job_id', jobIds)
-      : Promise.resolve({ data: [] as Array<{ level: string; status: string }> }),
     db
       .from('agent_runs')
-      .select('id, workflow, status, started_at')
+      .select('id, workflow, status, started_at, output, candidate_id')
       .eq('created_by', userId)
       .order('started_at', { ascending: false })
       .limit(8),
   ]);
 
+  // Fetch ALL agent runs for token usage aggregation (not just the latest 8).
+  const { data: allRuns } = await db
+    .from('agent_runs')
+    .select('id, workflow, status, started_at, output, candidate_id')
+    .eq('created_by', userId)
+    .order('started_at', { ascending: false });
+
   const candidateRows = candidates.data ?? [];
-  const flagRows = flags.data ?? [];
 
   const candidatesByJob = new Map<string, typeof candidateRows>();
   for (const c of candidateRows) {
@@ -65,8 +69,37 @@ export default async function DashboardPage() {
   const totalJobs = (jobs ?? []).length;
   const openJobs = (jobs ?? []).filter((j) => j.status === 'open').length;
   const urgentOpenJobs = (jobs ?? []).filter((j) => j.status === 'open' && j.priority === 'urgent').length;
-  const openFlags = flagRows.filter((f) => f.status === 'open');
-  const redFlags = openFlags.filter((f) => f.level === 'RED').length;
+  // --- Token usage metrics ---
+  type RunRow = { output?: { token_usage?: Record<string, { promptTokens: number; completionTokens: number; totalTokens: number }> } | null; started_at: string; candidate_id?: string | null };
+  const allRunRows = (allRuns ?? []) as unknown as RunRow[];
+
+  const totalTokenUsage = allRunRows.reduce(
+    (sum, r) => sum + totalTokensFromUsage(r.output?.token_usage),
+    0,
+  );
+
+  // Token usage this month.
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const tokenUsageThisMonth = allRunRows
+    .filter((r) => new Date(r.started_at) >= monthStart)
+    .reduce((sum, r) => sum + totalTokensFromUsage(r.output?.token_usage), 0);
+
+  // Avg token usage per candidate (unique candidate_ids with token data).
+  const candidatesWithTokens = new Map<string, number>();
+  for (const r of allRunRows) {
+    const tokens = totalTokensFromUsage(r.output?.token_usage);
+    if (tokens > 0 && r.candidate_id) {
+      candidatesWithTokens.set(
+        r.candidate_id,
+        (candidatesWithTokens.get(r.candidate_id) ?? 0) + tokens,
+      );
+    }
+  }
+  const avgTokenPerCandidate =
+    candidatesWithTokens.size > 0
+      ? Math.round(totalTokenUsage / candidatesWithTokens.size)
+      : 0;
 
   const countStatus = (status: string) => candidateRows.filter((c) => c.status === status).length;
 
@@ -102,25 +135,25 @@ export default async function DashboardPage() {
               icon={<AlertCircle className="size-5" aria-hidden />}
             />
             <StatCard
-              id="stat-total-jobs"
-              label="Total jobs"
-              value={totalJobs}
-              hint={`${openJobs} still open`}
+              id="stat-total-token-usage"
+              label="Total token usage"
+              value={totalTokenUsage.toLocaleString()}
+              hint={`${candidatesWithTokens.size} candidates`}
+              icon={<Cpu className="size-5" aria-hidden />}
+            />
+            <StatCard
+              id="stat-token-usage-month"
+              label="Tokens this month"
+              value={tokenUsageThisMonth.toLocaleString()}
+              hint={now.toLocaleString('default', { month: 'long' })}
               icon={<Layers className="size-5" aria-hidden />}
             />
             <StatCard
-              id="stat-total-candidates"
-              label="Total candidates"
-              value={candidateRows.length}
-              hint={`${countStatus('new')} new`}
-              icon={<Users className="size-5" aria-hidden />}
-            />
-            <StatCard
-              id="stat-awaiting-review"
-              label="Awaiting review"
-              value={openFlags.length}
-              hint={redFlags > 0 ? `${redFlags} must resolve` : 'No blocking flags'}
-              icon={<ShieldAlert className="size-5" aria-hidden />}
+              id="stat-avg-token-per-candidate"
+              label="Avg. tokens / candidate"
+              value={avgTokenPerCandidate.toLocaleString()}
+              hint={candidatesWithTokens.size > 0 ? `${candidatesWithTokens.size} candidates` : 'no data'}
+              icon={<Gauge className="size-5" aria-hidden />}
             />
           </section>
 

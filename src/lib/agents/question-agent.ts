@@ -9,7 +9,7 @@ You generate an interview question set tailored to one specific candidate applyi
 for one specific job.
 
 Produce questions in four categories:
-- screening: quick role-fit and motivation checks an early-stage recruiter can run.
+- screening: quick role-fit check an early-stage recruiter can run.
 - deep_technical: probing questions on the technologies the job actually requires
   and the candidate claims. Ask about trade-offs, failure modes and decisions,
   never trivia that can be looked up.
@@ -24,9 +24,10 @@ Rules:
 - expected_signals must be concrete, checkable things a strong answer contains -
   specific concepts, tools, numbers or trade-offs. Not "good communication".
 - Every question needs a rationale explaining what it establishes about this candidate.
-- Generate 3 to 5 screening, 4 to 6 deep_technical, and one question per identified
+- Generate 2 to 3 screening, 3 to 4 deep_technical, and one question per identified
   gap and per major claimed project.
-- Never ask about protected characteristics, age, family, health or nationality.`;
+- Never ask about protected characteristics, age, family, health or nationality.
+- Keep the total question count under 20. Quality over quantity.`;
 
 const USER = `Generate the interview question set.
 
@@ -79,7 +80,7 @@ export async function runQuestionAgent(input: {
       candidateName: input.candidateName,
       candidateHeadline: input.candidateHeadline ?? 'not stated',
       candidateSkills: input.candidateSkills.map(displaySkill).join(', ') || 'none extracted',
-      candidateHistory: input.candidateHistory.slice(0, 9000),
+      candidateHistory: input.candidateHistory.slice(0, 6000),
       matchScore: input.gap.match_score,
       verdict: input.gap.verdict,
       strongSkills: input.gap.strong_skills.map((s) => s.skill).join(', ') || 'none identified',
@@ -96,10 +97,9 @@ export async function runQuestionAgent(input: {
     },
   });
 
-  // Drop empties and cap the set so a runaway generation can't flood the DB.
-  return {
+    return {
     questions: result.questions
       .filter((q) => q.question.trim().length > 0)
-      .slice(0, 40),
+      .slice(0, 20),
   };
 }
