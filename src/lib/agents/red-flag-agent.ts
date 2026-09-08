@@ -108,8 +108,8 @@ export async function runRedFlagAgent(input: {
   });
 
   // Enforce the "must be evidenced" rule mechanically, not just in the prompt.
-  const flags = result.flags
-    .filter((f) => f.evidence.length > 0 && f.reason.trim().length > 0)
+  const flags = (result.flags ?? [])
+    .filter((f) => (f.evidence ?? []).length > 0 && f.reason.trim().length > 0)
     .map((f) => ({ ...f, confidence: clampConfidence(f.confidence) }));
 
   const level = highestLevel(flags.map((f) => f.level));

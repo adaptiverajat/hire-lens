@@ -123,7 +123,7 @@ export async function runReviewAgent(input: {
 
   // Hard guardrail: an unresolved RED flag can never yield advance/hire, no
   // matter what the model returned.
-  let recommendation = result.recommendation;
+  let recommendation = result.recommendation ?? 'hold';
   if (input.redFlags?.level === 'RED' && (recommendation === 'advance' || recommendation === 'hire')) {
     recommendation = 'hold';
   }
@@ -131,6 +131,6 @@ export async function runReviewAgent(input: {
   return {
     ...result,
     recommendation,
-    confidence: clampConfidence(result.confidence),
+    confidence: clampConfidence(result.confidence ?? 0.5),
   };
 }

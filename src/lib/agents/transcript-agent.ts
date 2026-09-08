@@ -85,7 +85,7 @@ export async function runTranscriptAgent(input: {
     runName: 'Transcript Evaluation Agent',
     system: SYSTEM,
     user: USER,
-    maxTokens: 4000,
+    maxTokens: 6000,
     input: {
       jobTitle: input.jobTitle,
       jobSummary: input.jobSummary,
@@ -101,18 +101,18 @@ export async function runTranscriptAgent(input: {
 
   return {
     ...result,
-    overall_rating: clampRating(result.overall_rating),
+    overall_rating: clampRating(result.overall_rating ?? 0),
     technical_assessment: {
       ...result.technical_assessment,
-      score: clampRating(result.technical_assessment.score),
+      score: clampRating(result.technical_assessment?.score ?? 0),
     },
     communication_assessment: {
       ...result.communication_assessment,
-      score: clampRating(result.communication_assessment.score),
+      score: clampRating(result.communication_assessment?.score ?? 0),
     },
-    answer_breakdown: result.answer_breakdown.map((a) => ({
+    answer_breakdown: (result.answer_breakdown ?? []).map((a) => ({
       ...a,
-      score: clampRating(a.score),
+      score: clampRating(a.score ?? 0),
     })),
   };
 }
