@@ -4,7 +4,10 @@
 -- stores agent-scoped learnings: calibration feedback, bias warnings, and
 -- outcome notes that adjust agent behavior on future runs.
 
-create table if not exists public.agent_memory (
+-- Drop first in case a partial/failed run left a malformed table.
+drop table if exists public.agent_memory cascade;
+
+create table public.agent_memory (
   id uuid primary key default gen_random_uuid(),
   agent_name text not null,
   note_type text not null
