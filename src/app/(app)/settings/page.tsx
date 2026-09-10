@@ -17,8 +17,8 @@ export default async function SettingsPage() {
 
   const [{ data: profile }, { count: vectorCount }, { count: runCount }] = await Promise.all([
     db.from('users').select('full_name, role, created_at').eq('id', user!.id).maybeSingle(),
-    db.from('embeddings').select('id', { count: 'exact', head: true }).eq('owner_user_id', user!.id),
-    db.from('agent_runs').select('id', { count: 'exact', head: true }).eq('created_by', user!.id),
+    db.from('embeddings').select('id', { count: 'exact', head: true }),
+    db.from('agent_runs').select('id', { count: 'exact', head: true }),
   ]);
 
   // Model names are server config, safe to surface read-only.

@@ -105,7 +105,6 @@ const graph = new StateGraph(State)
         .from('jobs')
         .select('id, title, seniority, structured, description_raw')
         .eq('id', interview.job_id)
-        .eq('created_by', state.userId)
         .maybeSingle(),
       db
         .from('candidates')

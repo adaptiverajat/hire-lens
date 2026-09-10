@@ -22,7 +22,6 @@ export default async function CandidatesPage() {
   const { data: jobs } = await db
     .from('jobs')
     .select('id, title, status, created_at')
-    .eq('created_by', userId)
     .order('created_at', { ascending: false });
 
   const jobIds = (jobs ?? []).map((j) => j.id);

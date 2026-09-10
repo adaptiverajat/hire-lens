@@ -13,8 +13,8 @@ export const GET = withAuth(async (ctx, request: Request) => {
   const level = url.searchParams.get('level');
   const jobId = url.searchParams.get('jobId');
 
-  // Scope to the caller's jobs first; flags carry no owner column of their own.
-  const { data: jobs } = await ctx.db.from('jobs').select('id, title').eq('created_by', ctx.userId);
+  // Shared workspace — list all jobs; flags carry no owner column of their own.
+  const { data: jobs } = await ctx.db.from('jobs').select('id, title');
 
   const jobIds = (jobs ?? []).map((j) => j.id);
   if (jobIds.length === 0) return NextResponse.json([]);

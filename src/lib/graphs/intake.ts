@@ -36,7 +36,6 @@ const jdGraph = new StateGraph(JdState)
       .from('jobs')
       .select('id, title, description_raw')
       .eq('id', state.jobId)
-      .eq('created_by', state.userId)
       .maybeSingle();
 
     if (!data) throw notFound('Job');
@@ -187,9 +186,8 @@ const resumeGraph = new StateGraph(ResumeState)
 
     const { data } = await db
       .from('candidates')
-      .select('id, job_id, resume_raw, jobs!inner(created_by)')
+      .select('id, job_id, resume_raw')
       .eq('id', state.candidateId)
-      .eq('jobs.created_by', state.userId)
       .maybeSingle();
 
     if (!data) throw notFound('Candidate');

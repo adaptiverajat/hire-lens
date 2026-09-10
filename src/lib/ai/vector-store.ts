@@ -88,7 +88,7 @@ export async function deleteDocumentVectors(ownerType: EmbeddingOwnerType, owner
 /** Cosine-similarity search over the pgvector index. */
 export async function retrieveSimilar(params: {
   query: string;
-  userId: string;
+  userId?: string;
   ownerTypes?: EmbeddingOwnerType[];
   jobId?: string | null;
   excludeCandidateId?: string | null;
@@ -104,7 +104,7 @@ export async function retrieveSimilar(params: {
   const { data, error } = await supabase.rpc('match_embeddings', {
     query_embedding: embedding,
     p_owner_types: params.ownerTypes ?? null,
-    p_user_id: params.userId,
+    p_user_id: params.userId ?? null,
     p_job_id: params.jobId ?? null,
     p_exclude_candidate_id: params.excludeCandidateId ?? null,
     match_count: params.limit ?? 8,

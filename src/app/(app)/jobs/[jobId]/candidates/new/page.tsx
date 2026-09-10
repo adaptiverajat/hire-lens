@@ -19,7 +19,6 @@ export default async function NewCandidatePage({ params }: Props) {
     .from('jobs')
     .select('id, title, parse_status')
     .eq('id', jobId)
-    .eq('created_by', user!.id)
     .maybeSingle();
 
   if (!job) notFound();

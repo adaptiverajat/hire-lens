@@ -33,7 +33,6 @@ export default async function DashboardPage() {
   const { data: jobs } = await db
     .from('jobs')
     .select('id, title, status, parse_status, priority, created_at')
-    .eq('created_by', userId)
     .order('created_at', { ascending: false });
 
   const jobIds = (jobs ?? []).map((j) => j.id);
@@ -45,7 +44,6 @@ export default async function DashboardPage() {
     db
       .from('agent_runs')
       .select('id, workflow, status, started_at, output, candidate_id')
-      .eq('created_by', userId)
       .order('started_at', { ascending: false })
       .limit(8),
   ]);
@@ -54,7 +52,6 @@ export default async function DashboardPage() {
   const { data: allRuns } = await db
     .from('agent_runs')
     .select('id, workflow, status, started_at, output, candidate_id')
-    .eq('created_by', userId)
     .order('started_at', { ascending: false });
 
   const candidateRows = candidates.data ?? [];

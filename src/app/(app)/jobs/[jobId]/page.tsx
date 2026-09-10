@@ -33,7 +33,6 @@ export default async function JobDetailPage({ params }: Props) {
     .from('jobs')
     .select('*')
     .eq('id', jobId)
-    .eq('created_by', user!.id)
     .maybeSingle();
 
   if (!job) notFound();

@@ -18,7 +18,7 @@ export interface EvidenceItem {
  */
 export async function runEvidenceAgent(input: {
   query: string;
-  userId: string;
+  userId?: string;
   jobId?: string | null;
   /** Keeps the candidate being analysed out of their own evidence set. */
   excludeCandidateId?: string | null;
@@ -30,7 +30,6 @@ export async function runEvidenceAgent(input: {
   try {
     chunks = await retrieveSimilar({
       query: input.query,
-      userId: input.userId,
       ownerTypes: input.ownerTypes ?? ['knowledge_entry', 'evaluation'],
       excludeCandidateId: input.excludeCandidateId ?? null,
       limit: input.limit ?? 4,

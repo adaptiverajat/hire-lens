@@ -8,7 +8,6 @@ export const GET = withAuth(async (ctx) => {
   const { data: jobs } = await ctx.db
     .from('jobs')
     .select('id, title, status, created_at, parse_status')
-    .eq('created_by', ctx.userId)
     .order('created_at', { ascending: false });
 
   const jobIds = (jobs ?? []).map((j) => j.id);
@@ -33,7 +32,6 @@ export const GET = withAuth(async (ctx) => {
     ctx.db
       .from('agent_runs')
       .select('id, workflow, status, started_at, finished_at, job_id, candidate_id')
-      .eq('created_by', ctx.userId)
       .order('started_at', { ascending: false })
       .limit(10),
   ]);

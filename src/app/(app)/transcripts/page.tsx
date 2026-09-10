@@ -39,7 +39,7 @@ export default async function TranscriptsPage() {
 
   const demo = await getDemoEnabled();
 
-  const { data: jobs } = await db.from('jobs').select('id, title').eq('created_by', user!.id);
+  const { data: jobs } = await db.from('jobs').select('id, title');
   const jobIds = (jobs ?? []).map((j) => j.id);
   const jobTitles = new Map((jobs ?? []).map((j) => [j.id, j.title as string]));
 

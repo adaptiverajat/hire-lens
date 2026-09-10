@@ -27,7 +27,7 @@ export const GET = withAuth(async (ctx, request: Request) => {
   const search = url.searchParams.get('search');
   const limit = Math.min(Number(url.searchParams.get('limit') ?? 100), 300);
 
-  const { data: jobs } = await ctx.db.from('jobs').select('id, title').eq('created_by', ctx.userId);
+  const { data: jobs } = await ctx.db.from('jobs').select('id, title');
   const jobIds = (jobs ?? []).map((j) => j.id);
   if (jobIds.length === 0) return NextResponse.json([]);
 

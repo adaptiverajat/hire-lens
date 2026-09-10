@@ -23,7 +23,6 @@ export const POST = withAuth(async (ctx, request: Request) => {
 
   const results = await retrieveSimilar({
     query: body.query,
-    userId: ctx.userId,
     ownerTypes: body.owner_types ?? undefined,
     jobId: body.job_id ?? null,
     limit: body.limit,

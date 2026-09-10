@@ -17,14 +17,12 @@ export default async function KnowledgePage() {
     db
       .from('knowledge_entries')
       .select('id, kind, title, content, outcome, created_at, jobs(title), candidates(full_name)')
-      .eq('created_by', user!.id)
       .order('created_at', { ascending: false })
       .limit(100),
-    db.from('jobs').select('id, title').eq('created_by', user!.id).order('created_at', { ascending: false }),
+    db.from('jobs').select('id, title').order('created_at', { ascending: false }),
     db
       .from('embeddings')
-      .select('id', { count: 'exact', head: true })
-      .eq('owner_user_id', user!.id),
+      .select('id', { count: 'exact', head: true }),
   ]);
 
   return (

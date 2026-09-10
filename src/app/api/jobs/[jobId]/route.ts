@@ -87,7 +87,6 @@ export const PATCH = withAuth(async (ctx, request: Request, { params }: Params) 
     .from('jobs')
     .update(update)
     .eq('id', jobId)
-    .eq('created_by', ctx.userId)
     .select('*')
     .single();
 
@@ -105,8 +104,7 @@ export const DELETE = withAuth(async (ctx, _request: Request, { params }: Params
   const { error } = await ctx.db
     .from('jobs')
     .delete()
-    .eq('id', jobId)
-    .eq('created_by', ctx.userId);
+    .eq('id', jobId);
 
   if (error) throw new ApiError(500, error.message);
   return NextResponse.json({ deleted: true });

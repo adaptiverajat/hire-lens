@@ -107,13 +107,12 @@ export async function parseBody<T extends z.ZodType>(request: Request, schema: T
 
 export type Row = Record<string, unknown>;
 
-/** Fetches a job the caller owns, or throws 404. */
+/** Fetches a job, or throws 404. Shared workspace — any authenticated user can access any job. */
 export async function requireOwnedJob(ctx: AuthContext, jobId: string, columns = '*'): Promise<Row> {
   const { data, error } = await ctx.db
     .from('jobs')
     .select(columns)
     .eq('id', jobId)
-    .eq('created_by', ctx.userId)
     .maybeSingle();
 
   if (error) throw new ApiError(500, error.message);
@@ -122,9 +121,8 @@ export async function requireOwnedJob(ctx: AuthContext, jobId: string, columns =
 }
 
 /**
- * Fetches a candidate the caller owns, or throws 404.
- * Ownership runs through the parent job, checked as a separate query so the
- * caller can pass an arbitrary column list.
+ * Fetches a candidate, or throws 404.
+ * Shared workspace — any authenticated user can access any candidate.
  */
 export async function requireOwnedCandidate(
   ctx: AuthContext,
@@ -145,7 +143,7 @@ export async function requireOwnedCandidate(
   return record;
 }
 
-/** Fetches an interview the caller owns (via the job), or throws 404. */
+/** Fetches an interview, or throws 404. Shared workspace — any authenticated user can access. */
 export async function requireOwnedInterview(
   ctx: AuthContext,
   interviewId: string
@@ -163,7 +161,7 @@ export async function requireOwnedInterview(
   return data;
 }
 
-/** Fetches a transcript the caller owns (via interview -> job), or throws 404. */
+/** Fetches a transcript, or throws 404. Shared workspace — any authenticated user can access. */
 export async function requireOwnedTranscript(ctx: AuthContext, transcriptId: string) {
   const { data, error } = await ctx.db
     .from('transcripts')

@@ -47,12 +47,11 @@ export default async function CandidatePage({ params }: Props) {
 
   if (!candidate) notFound();
 
-  // Ownership runs through the job.
+  // Shared workspace — any authenticated user can access any job.
   const { data: job } = await db
     .from('jobs')
     .select('*')
     .eq('id', candidate.job_id)
-    .eq('created_by', user!.id)
     .maybeSingle();
 
   if (!job) notFound();

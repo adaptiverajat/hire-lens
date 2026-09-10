@@ -52,7 +52,6 @@ export default async function QuestionLibraryPage({
   const { data: jobs } = await db
     .from('jobs')
     .select('id, title')
-    .eq('created_by', user!.id)
     .order('created_at', { ascending: false });
 
   const jobIds = (jobs ?? []).map((j) => j.id);

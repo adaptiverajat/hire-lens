@@ -16,14 +16,13 @@ const createJobSchema = z.object({
   source_file_path: z.string().max(500).nullish(),
 });
 
-/** GET /api/jobs - list the caller's jobs with candidate counts. */
+/** GET /api/jobs - list all jobs with candidate counts. */
 export const GET = withAuth(async (ctx) => {
   const { data: jobs, error } = await ctx.db
     .from('jobs')
     .select(
       'id, title, department, location, status, seniority, parse_status, parse_error, opened_at, deadline_date, structured, created_at, updated_at'
     )
-    .eq('created_by', ctx.userId)
     .order('created_at', { ascending: false });
 
   if (error) throw new ApiError(500, error.message);
