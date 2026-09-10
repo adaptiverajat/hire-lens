@@ -169,16 +169,16 @@ export function AuthForm({
       </div>
 
       <div className="relative z-10 flex items-center justify-center px-6 py-12 lg:justify-start lg:pl-2">
-        <div className="relative h-100 w-full max-w-sm overflow-hidden rounded-xl ring-1 ring-foreground/10">
-          <Image
+      {/*  <div className="relative h-100 w-full max-w-sm overflow-hidden rounded-xl ring-1 ring-foreground/10">
+           <Image
             src={HireLens}
             alt="HireLens"
             fill
             priority
             className="object-cover"
             sizes="(max-width: 1024px) 100vw, 420px"
-          />
-        </div>
+          /> 
+        </div>*/}
       </div>
 
       <aside className="relative z-10 hidden flex-col justify-center gap-6 bg-muted/40 px-10 lg:flex">
