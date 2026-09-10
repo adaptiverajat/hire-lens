@@ -1,7 +1,8 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import type { GapAnalysis, JdExtraction, QuestionGeneration, ResumeExtraction } from '@/lib/agents/schemas';
 import { runEvidenceAgent, type EvidenceItem } from '@/lib/agents/evidence-agent';
-import { runAnalysisAndQuestionsAgent } from '@/lib/agents/analysis-questions-agent';
+import { runGapAnalysisAgent } from '@/lib/agents/gap-analysis-agent';
+import { runQuestionAgent } from '@/lib/agents/question-agent';
 import { candidateHistoryText } from '@/lib/domain/format';
 import type { CandidateSkillRow, JobSkillRow } from '@/lib/domain/matching';
 import { indexDocument } from '@/lib/ai/vector-store';
@@ -13,7 +14,7 @@ import { finishRun, NodeTimer, startRun } from '@/lib/graphs/run-log';
  * Candidate Analysis workflow (Features 3 + 4).
  *
  *   load -> retrieve_evidence -> gap_analysis -> persist_analysis
- *        -> generate_questions -> persist_questions
+ *        -> question_generation -> persist_questions
  *
  * Evidence retrieval runs before the analysis so the gap assessment and the
  * question set are both grounded in comparable historical cases.
@@ -120,11 +121,11 @@ const graph = new StateGraph(State)
     return { evidence };
   })
 
-  .addNode('analyze_and_question', async (state) => {
+  .addNode('gap_analysis', async (state) => {
     const job = state.job!;
     const candidate = state.candidate!;
 
-    const { analysis, coverageScore, questions } = await runAnalysisAndQuestionsAgent({
+    const { analysis, coverageScore } = await runGapAnalysisAgent({
       jobTitle: job.title,
       jobSummary: jobSummary(job),
       jobSkills: state.jobSkills,
@@ -137,7 +138,27 @@ const graph = new StateGraph(State)
       evidence: state.evidence,
     });
 
-    return { gap: analysis, coverageScore, questions: { questions } };
+    return { gap: analysis, coverageScore };
+  })
+
+  .addNode('question_generation', async (state) => {
+    const job = state.job!;
+    const candidate = state.candidate!;
+    const gap = state.gap!;
+
+    const questions = await runQuestionAgent({
+      jobTitle: job.title,
+      jobSummary: jobSummary(job),
+      requirements: state.jobSkills.map((skill) => skill.skill),
+      candidateName: candidate.full_name,
+      candidateHeadline: candidate.headline,
+      candidateSkills: state.candidateSkills.map((skill) => skill.skill),
+      candidateHistory: candidateHistoryText(candidate.structured),
+      gap,
+      evidence: state.evidence,
+    });
+
+    return { questions };
   })
 
   .addNode('persist_analysis', async (state) => {
@@ -238,9 +259,10 @@ const graph = new StateGraph(State)
 
   .addEdge(START, 'load')
   .addEdge('load', 'retrieve_evidence')
-  .addEdge('retrieve_evidence', 'analyze_and_question')
-  .addEdge('analyze_and_question', 'persist_analysis')
-  .addEdge('persist_analysis', 'persist_questions')
+  .addEdge('retrieve_evidence', 'gap_analysis')
+  .addEdge('gap_analysis', 'persist_analysis')
+  .addEdge('persist_analysis', 'question_generation')
+  .addEdge('question_generation', 'persist_questions')
   .addEdge('persist_questions', END);
 
 export const candidateAnalysisGraph = graph.compile();

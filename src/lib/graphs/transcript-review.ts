@@ -14,7 +14,23 @@ import { resumeProfileText } from '@/lib/domain/format';
 import { indexDocument } from '@/lib/ai/vector-store';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { ApiError, notFound } from '@/lib/api/handler';
-import { finishRun, NodeTimer, startRun } from '@/lib/graphs/run-log';
+import {
+  completeAgentTask,
+  createAgentTask,
+  failAgentTask,
+  finishRun,
+  NodeTimer,
+  persistAgentArtifact,
+  recordAgentEvent,
+  startAgentTask,
+  startRun,
+} from '@/lib/graphs/run-log';
+import { createArtifact } from '@/lib/orchestration/contracts';
+import {
+  claimsFromTranscriptEvaluation,
+  validateRedFlags,
+  validateTranscriptEvaluation,
+} from '@/lib/orchestration/validation';
 
 /**
  * Transcript Review workflow (Features 5 + 6 + 7).
@@ -31,6 +47,8 @@ const State = Annotation.Root({
   userId: Annotation<string>(),
   transcriptId: Annotation<string>(),
   runId: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
+  evaluationTaskId: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
+  redFlagTaskId: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
 
   jobId: Annotation<string>({ reducer: (_, b) => b, default: () => '' }),
   candidateId: Annotation<string>({ reducer: (_, b) => b, default: () => '' }),
@@ -174,6 +192,16 @@ const graph = new StateGraph(State)
   })
 
   .addNode('evaluate_transcript', async (state) => {
+    if (state.evaluationTaskId) await startAgentTask(state.evaluationTaskId);
+    if (state.runId) {
+      await recordAgentEvent({
+        runId: state.runId,
+        taskId: state.evaluationTaskId,
+        eventType: 'agent_started',
+        payload: { agent: 'Transcript Evaluation Agent' },
+      });
+    }
+
     const evaluation = await runTranscriptAgent({
       jobTitle: state.job!.title,
       jobSummary: jobSummary(state.job!),
@@ -186,13 +214,56 @@ const graph = new StateGraph(State)
       evidence: state.evidence,
     });
 
+    const issues = validateTranscriptEvaluation(evaluation, state.transcriptText);
+    const errors = issues.filter((issue) => issue.severity === 'error');
+    if (errors.length > 0) {
+      const message = errors.map((issue) => issue.message).join(' ');
+      if (state.evaluationTaskId) await failAgentTask(state.evaluationTaskId, message);
+      throw new ApiError(502, `Transcript Evaluation Agent output failed validation: ${message}`);
+    }
+
+    if (state.runId) {
+      const artifact = createArtifact({
+        runId: state.runId,
+        taskId: state.evaluationTaskId ?? undefined,
+        artifactType: 'transcript_evaluation',
+        schemaVersion: '1.0',
+        producer: 'Transcript Evaluation Agent',
+        consumer: 'Human Review Agent',
+        payload: evaluation,
+        evidence: claimsFromTranscriptEvaluation(evaluation, state.transcriptId),
+        warnings: issues.map((issue) => issue.message),
+        confidence: 1,
+      });
+      artifact.status = 'validated';
+      const artifactId = await persistAgentArtifact(artifact);
+      await completeAgentTask(state.evaluationTaskId ?? '', artifactId);
+      await recordAgentEvent({
+        runId: state.runId,
+        taskId: state.evaluationTaskId,
+        eventType: 'agent_completed',
+        payload: { agent: 'Transcript Evaluation Agent', artifactId },
+      });
+    }
+
     return { evaluation };
   })
 
   .addNode('persist_evaluation', async (state) => {
     const evaluation = state.evaluation!;
+    const db = createSupabaseAdminClient();
 
-    const { data, error } = await createSupabaseAdminClient()
+    if (state.runId) {
+      const { data: existing } = await db
+        .from('evaluations')
+        .select('id')
+        .eq('transcript_id', state.transcriptId)
+        .eq('run_id', state.runId)
+        .maybeSingle();
+      if (existing?.id) return { evaluationId: existing.id as string };
+    }
+
+    const { data, error } = await db
       .from('evaluations')
       .insert({
         transcript_id: state.transcriptId,
@@ -220,7 +291,15 @@ const graph = new StateGraph(State)
   })
 
   .addNode('detect_red_flags', async (state) => {
-    const evaluation = state.evaluation!;
+    if (state.redFlagTaskId) await startAgentTask(state.redFlagTaskId);
+    if (state.runId) {
+      await recordAgentEvent({
+        runId: state.runId,
+        taskId: state.redFlagTaskId,
+        eventType: 'agent_started',
+        payload: { agent: 'Red Flag Agent' },
+      });
+    }
 
     const redFlags = await runRedFlagAgent({
       jobTitle: state.job!.title,
@@ -231,11 +310,49 @@ const graph = new StateGraph(State)
       candidateHeadline: state.candidate!.headline,
       resumeProfile: resumeProfileText(state.candidate!.structured),
       transcript: state.transcriptText,
-      technicalScore: evaluation.technical_assessment.score,
-      communicationScore: evaluation.communication_assessment.score,
-      strengths: evaluation.strengths,
-      weaknesses: evaluation.weaknesses,
     });
+
+    const issues = validateRedFlags(redFlags);
+    const errors = issues.filter((issue) => issue.severity === 'error');
+    if (errors.length > 0) {
+      const message = errors.map((issue) => issue.message).join(' ');
+      if (state.redFlagTaskId) await failAgentTask(state.redFlagTaskId, message);
+      throw new ApiError(502, `Red Flag Agent output failed validation: ${message}`);
+    }
+
+    if (state.runId) {
+      const artifact = createArtifact({
+        runId: state.runId,
+        taskId: state.redFlagTaskId ?? undefined,
+        artifactType: 'red_flag_analysis',
+        schemaVersion: '1.0',
+        producer: 'Red Flag Agent',
+        consumer: 'Human Review Agent',
+        payload: redFlags,
+        evidence: redFlags.flags.flatMap((flag) =>
+          flag.evidence.map((evidence) => ({
+            sourceType: evidence.source,
+            sourceId: state.candidateId,
+            quote: evidence.quote,
+            claim: flag.reason,
+            confidence: flag.confidence,
+          }))
+        ),
+        warnings: issues.map((issue) => issue.message),
+        confidence: redFlags.flags.length
+          ? Math.min(...redFlags.flags.map((flag) => flag.confidence))
+          : 1,
+      });
+      artifact.status = 'validated';
+      const artifactId = await persistAgentArtifact(artifact);
+      await completeAgentTask(state.redFlagTaskId ?? '', artifactId);
+      await recordAgentEvent({
+        runId: state.runId,
+        taskId: state.redFlagTaskId,
+        eventType: 'agent_completed',
+        payload: { agent: 'Red Flag Agent', artifactId },
+      });
+    }
 
     return { redFlags };
   })
@@ -243,6 +360,16 @@ const graph = new StateGraph(State)
   .addNode('persist_flags', async (state) => {
     const redFlags = state.redFlags!;
     const db = createSupabaseAdminClient();
+
+    if (state.runId) {
+      const { data: existing } = await db
+        .from('flags')
+        .select('id')
+        .eq('run_id', state.runId);
+      if (existing && existing.length > 0) {
+        return { flagIds: existing.map((row: { id: string }) => row.id) };
+      }
+    }
 
     interface FlagRow {
       job_id: string;
@@ -355,6 +482,14 @@ const graph = new StateGraph(State)
     const evaluation = state.evaluation!;
     const review = state.review!;
 
+    const { data: existingKnowledge } = await db
+      .from('knowledge_entries')
+      .select('id')
+      .eq('evaluation_id', state.evaluationId)
+      .eq('kind', 'interview_assessment')
+      .maybeSingle();
+    if (existingKnowledge?.id) return {};
+
     // Move the candidate into the interviewing stage; the final decision stays
     // with the human reviewer.
     await db
@@ -434,9 +569,9 @@ const graph = new StateGraph(State)
   .addEdge(START, 'load')
   .addEdge('load', 'retrieve_evidence')
   .addEdge('retrieve_evidence', 'evaluate_transcript')
+  .addEdge('retrieve_evidence', 'detect_red_flags')
   .addEdge('evaluate_transcript', 'persist_evaluation')
-  .addEdge('persist_evaluation', 'detect_red_flags')
-  .addEdge('detect_red_flags', 'persist_flags')
+  .addEdge(['persist_evaluation', 'detect_red_flags'], 'persist_flags')
   .addEdge('persist_flags', 'synthesise_review')
   .addEdge('synthesise_review', 'persist_knowledge')
   .addEdge('persist_knowledge', END);
@@ -465,10 +600,27 @@ export async function runTranscriptReview(input: {
     input: { transcript_id: input.transcriptId },
   });
 
+  const [evaluationTaskId, redFlagTaskId] = runId
+    ? await Promise.all([
+        createAgentTask({
+          runId,
+          agentName: 'Transcript Evaluation Agent',
+          taskType: 'transcript_evaluation',
+          idempotencyKey: `${runId}:transcript_evaluation`,
+        }),
+        createAgentTask({
+          runId,
+          agentName: 'Red Flag Agent',
+          taskType: 'red_flag_analysis',
+          idempotencyKey: `${runId}:red_flag_analysis`,
+        }),
+      ])
+    : [null, null];
+
   try {
     const result = await timer.track('transcript_review', () =>
       transcriptReviewGraph.invoke(
-        { ...input, runId },
+        { ...input, runId, evaluationTaskId, redFlagTaskId },
         { runName: 'Transcript Review', recursionLimit: 25 }
       )
     );

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { ApiError, requireOwnedCandidate, withAuth } from '@/lib/api/handler';
-import { runCandidateAnalysis } from '@/lib/graphs/candidate-analysis';
+import { runOrchestratedWorkflow } from '@/lib/orchestration/orchestrator';
 import { withTokenUsage } from '@/lib/ai/token-usage';
-import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import { mergeRunOutput } from '@/lib/graphs/run-log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -26,7 +26,8 @@ export const POST = withAuth(async (ctx, _request: Request, { params }: Params) 
   }
 
   const { result, usage } = await withTokenUsage(() =>
-    runCandidateAnalysis({
+    runOrchestratedWorkflow({
+      workflow: 'candidate_analysis',
       userId: ctx.userId,
       jobId: String(candidate.job_id),
       candidateId,
@@ -35,10 +36,7 @@ export const POST = withAuth(async (ctx, _request: Request, { params }: Params) 
 
   // Persist token usage into the agent run's output.
   if (result.runId && Object.keys(usage).length > 0) {
-    await createSupabaseAdminClient()
-      .from('agent_runs')
-      .update({ output: { token_usage: usage } })
-      .eq('id', result.runId);
+    await mergeRunOutput(result.runId, { token_usage: usage });
   }
 
   return NextResponse.json({

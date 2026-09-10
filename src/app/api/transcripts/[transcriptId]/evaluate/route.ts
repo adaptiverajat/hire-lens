@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireOwnedTranscript, withAuth } from '@/lib/api/handler';
-import { runTranscriptReview } from '@/lib/graphs/transcript-review';
+import { runOrchestratedWorkflow } from '@/lib/orchestration/orchestrator';
 import { withTokenUsage } from '@/lib/ai/token-usage';
-import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import { mergeRunOutput } from '@/lib/graphs/run-log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -21,15 +21,17 @@ export const POST = withAuth(async (ctx, _request: Request, { params }: Params) 
   const transcript = await requireOwnedTranscript(ctx, transcriptId);
 
   const { result, usage } = await withTokenUsage(() =>
-    runTranscriptReview({ userId: ctx.userId, transcriptId, candidateId: transcript.candidate_id }),
+    runOrchestratedWorkflow({
+      workflow: 'transcript_review',
+      userId: ctx.userId,
+      transcriptId,
+      candidateId: transcript.candidate_id,
+    }),
   );
 
   // Persist token usage into the agent run's output.
   if (result.runId && Object.keys(usage).length > 0) {
-    await createSupabaseAdminClient()
-      .from('agent_runs')
-      .update({ output: { token_usage: usage } })
-      .eq('id', result.runId);
+    await mergeRunOutput(result.runId, { token_usage: usage });
   }
 
   return NextResponse.json({

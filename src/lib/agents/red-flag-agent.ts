@@ -60,11 +60,8 @@ Profile:
 INTERVIEW TRANSCRIPT
 {transcript}
 
-INTERVIEW ASSESSMENT ALREADY PRODUCED
-Technical score: {technicalScore} out of 10
-Communication score: {communicationScore} out of 10
-Assessed strengths: {strengths}
-Assessed weaknesses: {weaknesses}`;
+Assess only checkable inconsistencies between the resume claims and the transcript.
+Do not infer a red flag from another agent's scores or recommendation.`;
 
 /** Feature 6: red flag detection. Advisory only - never auto-rejects. */
 export async function runRedFlagAgent(input: {
@@ -76,10 +73,6 @@ export async function runRedFlagAgent(input: {
   candidateHeadline: string | null;
   resumeProfile: string;
   transcript: string;
-  technicalScore: number | null;
-  communicationScore: number | null;
-  strengths: string[];
-  weaknesses: string[];
 }): Promise<RedFlagAnalysis> {
   const result = await generateStructured({
     schema: redFlagSchema,
@@ -100,10 +93,6 @@ export async function runRedFlagAgent(input: {
       candidateHeadline: input.candidateHeadline ?? 'not stated',
       resumeProfile: input.resumeProfile.slice(0, 6000),
       transcript: input.transcript.slice(0, 18000),
-      technicalScore: input.technicalScore ?? 'not assessed',
-      communicationScore: input.communicationScore ?? 'not assessed',
-      strengths: input.strengths.join('; ') || 'none recorded',
-      weaknesses: input.weaknesses.join('; ') || 'none recorded',
     },
   });
 
