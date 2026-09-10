@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ApiError, parseBody, requireOwnedCandidate, withAuth } from '@/lib/api/handler';
 import { indexDocument } from '@/lib/ai/vector-store';
+import { writeAgentMemory } from '@/lib/orchestration/memory';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -131,6 +132,33 @@ export const POST = withAuth(async (ctx, request: Request) => {
       candidateId: body.candidate_id,
       content,
       metadata: { title, outcome: body.final_decision, kind },
+    });
+  }
+
+  // --- Shared Agent Memory write-back -------------------------------------
+  // When a human overrides an agent recommendation, write a calibration note
+  // so the agent can learn from the correction on future runs.
+  if (body.decision === 'override' && body.agent_recommendation) {
+    const agentName =
+      body.flag_id
+        ? 'Red Flag Agent'
+        : body.evaluation_id
+          ? 'Human Review Agent'
+          : 'Transcript Evaluation Agent';
+
+    await writeAgentMemory({
+      agentName,
+      noteType: 'calibration',
+      source: 'reviewer_override',
+      content: `Reviewer overrode agent recommendation "${body.agent_recommendation}" with "${body.final_decision}". Reason: ${body.notes}`,
+      confidence: 0.9,
+      jobId,
+      candidateId: body.candidate_id,
+      metadata: {
+        agent_recommendation: body.agent_recommendation,
+        final_decision: body.final_decision,
+        reviewer_notes: body.notes,
+      },
     });
   }
 

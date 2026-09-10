@@ -7,6 +7,7 @@ import {
   type TranscriptEvaluation,
 } from '@/lib/agents/schemas';
 import { formatEvidence, type EvidenceItem } from '@/lib/agents/evidence-agent';
+import type { AgentMemoryNote } from '@/lib/orchestration/memory';
 
 const SYSTEM = `You are the Human Review Agent in a recruitment intelligence platform.
 You assemble everything the other agents produced into a decision packet for a human
@@ -57,7 +58,8 @@ Individual flags:
 {flagList}
 
 COMPARABLE HISTORICAL CASES AND THEIR OUTCOMES
-{evidence}`;
+{evidence}
+{calibrationNotes}`;
 
 /** Feature 7: synthesise an evidence-based recommendation for a human reviewer. */
 export async function runReviewAgent(input: {
@@ -73,6 +75,8 @@ export async function runReviewAgent(input: {
   evaluation: TranscriptEvaluation | null;
   redFlags: RedFlagAnalysis | null;
   evidence: EvidenceItem[];
+  /** Calibration notes from shared agent memory. */
+  calibrationNotes?: AgentMemoryNote[];
 }): Promise<ReviewSynthesis> {
   const evaluationBlock = input.evaluation
     ? [
@@ -118,6 +122,9 @@ export async function runReviewAgent(input: {
       flagReason: input.redFlags?.overall_reason ?? 'not assessed',
       flagList,
       evidence: formatEvidence(input.evidence),
+      calibrationNotes: input.calibrationNotes && input.calibrationNotes.length > 0
+        ? `\n\nCALIBRATION NOTES (from past runs — adjust your behavior accordingly)\n${input.calibrationNotes.map((n, i) => `Note ${i + 1} (${n.note_type}, ${Math.round(n.confidence * 100)}%): ${n.content}`).join('\n')}`
+        : '',
     },
   });
 

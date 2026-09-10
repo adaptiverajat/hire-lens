@@ -1,5 +1,6 @@
 import { generateStructured } from '@/lib/ai/structured';
 import { clampConfidence, redFlagSchema, type RedFlagAnalysis } from '@/lib/agents/schemas';
+import type { AgentMemoryNote } from '@/lib/orchestration/memory';
 
 const SYSTEM = `You are the Red Flag Agent in a recruitment intelligence platform.
 You look for inconsistencies between what a candidate claimed and what they
@@ -61,7 +62,8 @@ INTERVIEW TRANSCRIPT
 {transcript}
 
 Assess only checkable inconsistencies between the resume claims and the transcript.
-Do not infer a red flag from another agent's scores or recommendation.`;
+Do not infer a red flag from another agent's scores or recommendation.{feedback}
+{calibrationNotes}`;
 
 /** Feature 6: red flag detection. Advisory only - never auto-rejects. */
 export async function runRedFlagAgent(input: {
@@ -73,6 +75,10 @@ export async function runRedFlagAgent(input: {
   candidateHeadline: string | null;
   resumeProfile: string;
   transcript: string;
+  /** Reflexion feedback from a previous failed validation attempt. */
+  feedback?: string;
+  /** Calibration notes from shared agent memory. */
+  calibrationNotes?: AgentMemoryNote[];
 }): Promise<RedFlagAnalysis> {
   const result = await generateStructured({
     schema: redFlagSchema,
@@ -93,6 +99,12 @@ export async function runRedFlagAgent(input: {
       candidateHeadline: input.candidateHeadline ?? 'not stated',
       resumeProfile: input.resumeProfile.slice(0, 6000),
       transcript: input.transcript.slice(0, 18000),
+      feedback: input.feedback
+        ? `\n\nVALIDATION FEEDBACK (previous attempt failed):\n${input.feedback}\nPlease correct these issues.`
+        : '',
+      calibrationNotes: input.calibrationNotes && input.calibrationNotes.length > 0
+        ? `\n\nCALIBRATION NOTES (from past runs — adjust your behavior accordingly)\n${input.calibrationNotes.map((n, i) => `Note ${i + 1} (${n.note_type}, ${Math.round(n.confidence * 100)}%): ${n.content}`).join('\n')}`
+        : '',
     },
   });
 

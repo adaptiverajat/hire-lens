@@ -126,7 +126,13 @@ const jdGraph = new StateGraph(JdState)
 
 export const jdIntakeGraph = jdGraph.compile();
 
-export async function runJdIntake(input: { userId: string; jobId: string }) {
+export interface JdIntakeResult {
+  extraction: { title: string; seniority: string | null; [key: string]: unknown } | null;
+  requirements: Array<{ skill: string; [key: string]: unknown }>;
+  runId: string | null;
+}
+
+export async function runJdIntake(input: { userId: string; jobId: string }): Promise<JdIntakeResult> {
   const timer = new NodeTimer();
   const runId = await startRun({
     workflow: 'jd_intake',
@@ -266,7 +272,13 @@ const resumeGraph = new StateGraph(ResumeState)
 
 export const resumeIntakeGraph = resumeGraph.compile();
 
-export async function runResumeIntake(input: { userId: string; candidateId: string }) {
+export interface ResumeIntakeResult {
+  extraction: { full_name: string; [key: string]: unknown } | null;
+  skills: Array<{ skill: string; [key: string]: unknown }>;
+  runId: string | null;
+}
+
+export async function runResumeIntake(input: { userId: string; candidateId: string }): Promise<ResumeIntakeResult> {
   const timer = new NodeTimer();
   const runId = await startRun({
     workflow: 'resume_intake',

@@ -24,6 +24,7 @@ export async function runEvidenceAgent(input: {
   excludeCandidateId?: string | null;
   ownerTypes?: EmbeddingOwnerType[];
   limit?: number;
+  minSimilarity?: number;
 }): Promise<EvidenceItem[]> {
   let chunks: RetrievedChunk[] = [];
 
@@ -33,7 +34,7 @@ export async function runEvidenceAgent(input: {
       ownerTypes: input.ownerTypes ?? ['knowledge_entry', 'evaluation'],
       excludeCandidateId: input.excludeCandidateId ?? null,
       limit: input.limit ?? 4,
-      minSimilarity: 0.2,
+      minSimilarity: input.minSimilarity ?? 0.2,
     });
   } catch (error) {
     // Retrieval is an enhancement, never a hard dependency: a cold vector store

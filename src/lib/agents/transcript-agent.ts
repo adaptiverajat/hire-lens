@@ -5,6 +5,7 @@ import {
   type TranscriptEvaluation,
 } from '@/lib/agents/schemas';
 import { formatEvidence, type EvidenceItem } from '@/lib/agents/evidence-agent';
+import type { AgentMemoryNote } from '@/lib/orchestration/memory';
 
 const SYSTEM = `You are the Transcript Evaluation Agent in a recruitment intelligence platform.
 You read an interview transcript and assess how well the candidate actually performed.
@@ -48,7 +49,9 @@ Participants: {participants}
 ---
 
 CALIBRATION - COMPARABLE PAST EVALUATIONS
-{evidence}`;
+{evidence}
+{feedback}
+{calibrationNotes}`;
 
 export interface PlannedQuestion {
   question: string;
@@ -67,6 +70,10 @@ export async function runTranscriptAgent(input: {
   transcript: string;
   participants: string[];
   evidence: EvidenceItem[];
+  /** Reflexion feedback from a previous failed validation attempt. */
+  feedback?: string;
+  /** Calibration notes from shared agent memory. */
+  calibrationNotes?: AgentMemoryNote[];
 }): Promise<TranscriptEvaluation> {
   const questions = input.questions.length
     ? input.questions
@@ -96,6 +103,12 @@ export async function runTranscriptAgent(input: {
       participants: input.participants.join(', ') || 'not identified',
       transcript: input.transcript.slice(0, 24000),
       evidence: formatEvidence(input.evidence),
+      feedback: input.feedback
+        ? `\n\nVALIDATION FEEDBACK (previous attempt failed):\n${input.feedback}\nPlease correct these issues.`
+        : '',
+      calibrationNotes: input.calibrationNotes && input.calibrationNotes.length > 0
+        ? `\n\nCALIBRATION NOTES (from past runs — adjust your behavior accordingly)\n${input.calibrationNotes.map((n, i) => `Note ${i + 1} (${n.note_type}, ${Math.round(n.confidence * 100)}%): ${n.content}`).join('\n')}`
+        : '',
     },
   });
 

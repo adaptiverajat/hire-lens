@@ -19,7 +19,8 @@ export default function AboutPage() {
       </div>
 
       <p className="text-lg text-muted-foreground">
-        Recruitment intelligence that uses agentic AI to support evidence-based hiring.
+        Recruitment intelligence that uses an adaptive multi-agent system to support
+        evidence-based hiring with reflexion, shared memory, and cross-candidate reasoning.
       </p>
 
       <Card id="about-what-it-does-card">
@@ -29,7 +30,8 @@ export default function AboutPage() {
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
             HireLens turns job descriptions and resumes into structured, comparable profiles, then
-            runs a reproducible, multi-agent workflow to help recruiters make better decisions.
+            runs a reproducible, multi-agent workflow with supervisor routing, reflexion loops,
+            and shared agent memory to help recruiters make better decisions.
           </p>
           <ul className="list-disc space-y-1 pl-5">
             <li>
@@ -41,8 +43,25 @@ export default function AboutPage() {
               history, projects, and contact details from resumes.
             </li>
             <li>
+              <strong>Supervisor routing</strong> — inspects candidate coverage and seniority before
+              analysis to decide depth: minimal (skip evidence retrieval for senior, well-matched
+              candidates), standard, or deep (extra evidence retrieval for junior or weakly-matched
+              candidates).
+            </li>
+            <li>
               <strong>Evidence-based matching</strong> — computes a deterministic weighted coverage
               score and uses an LLM to add qualitative gap analysis with cited reasoning.
+            </li>
+            <li>
+              <strong>Iterative evidence retrieval (agentic RAG)</strong> — runs a second vector
+              search pass after gap analysis, targeted at the specific missing and partial skills
+              identified, so interview questions are grounded in how similar gaps were validated
+              historically.
+            </li>
+            <li>
+              <strong>Cross-candidate reasoning</strong> — fetches a summary of other candidates in
+              the same job pipeline and feeds it into the Gap Analysis Agent so questions
+              differentiate between similarly-matched candidates.
             </li>
             <li>
               <strong>Interview preparation</strong> — generates candidate-specific and role-specific
@@ -58,8 +77,24 @@ export default function AboutPage() {
               the interview (advisory only; never auto-rejects).
             </li>
             <li>
+              <strong>Reflexion loops</strong> — when an agent's output fails validation, it
+              gets a second attempt with feedback describing what went wrong. Systematic failures
+              are written to shared agent memory as bias warnings.
+            </li>
+            <li>
+              <strong>Shared agent memory</strong> — a persistent, cross-run calibration store. When
+              a human reviewer overrides an agent recommendation, a calibration note is written so
+              the agent adjusts its behavior on future runs. Agents read their own notes before
+              each run.
+            </li>
+            <li>
               <strong>Review synthesis</strong> — assembles match, evaluation, and flags into a
               decision packet for a human reviewer.
+            </li>
+            <li>
+              <strong>Durable task orchestration</strong> — every agent run is tracked as typed
+              tasks with idempotency keys, dependency graphs, and persisted artifacts with evidence
+              claims, warnings, and confidence scores.
             </li>
             <li>
               <strong>Learning knowledge base</strong> — stores past evaluations and interview
@@ -67,7 +102,7 @@ export default function AboutPage() {
             </li>
             <li>
               <strong>Pre-interview export</strong> — generates a printable PDF report per candidate
-              with match analysis, strong areas, gaps, interview questions, and &quot;look for&quot;
+              with match analysis, strong areas, gaps, interview questions, and "look for"
               signals before the interview.
             </li>
             <li>
@@ -77,9 +112,19 @@ export default function AboutPage() {
               with HTML formatting copied to clipboard.
             </li>
             <li>
+              <strong>Candidate comparison</strong> — side-by-side comparison of all candidates in a
+              job pipeline, ranked by interview rating and match score, with technical and
+              communication scores, flags, and decisions.
+            </li>
+            <li>
               <strong>Candidate deletion</strong> — permanently removes a candidate and all
               associated data (resume, analysis, interviews, evaluations, flags) when a profile was
               uploaded to the wrong job.
+            </li>
+            <li>
+              <strong>Shared workspace</strong> — all authenticated users see and manage all jobs,
+              candidates, and related data. The <code>created_by</code> field is retained for audit
+              trail but no longer gates access.
             </li>
             <li>
               <strong>Token usage tracking</strong> — captures per-agent OpenAI token usage
@@ -89,7 +134,7 @@ export default function AboutPage() {
           </ul>
           <p>
             Every AI output is advisory. A human always makes the final call, and every override
-            becomes retrievable precedent.
+            becomes calibration data that makes the agents smarter over time.
           </p>
         </CardContent>
       </Card>
@@ -116,6 +161,7 @@ export default function AboutPage() {
               <ul className="list-disc space-y-1 pl-5 text-sm">
                 <li>Supabase (Postgres + pgvector)</li>
                 <li>Supabase Auth with SSR sessions</li>
+                <li>Row Level Security (shared workspace)</li>
                 <li>Zod for schema validation</li>
                 <li>OpenAI chat and embedding models</li>
               </ul>
@@ -127,6 +173,9 @@ export default function AboutPage() {
                 <li>LangGraph state-machine workflows</li>
                 <li>OpenAI structured outputs / Responses API</li>
                 <li>LangSmith tracing</li>
+                <li>Durable task lifecycle (idempotency, artifacts, events)</li>
+                <li>Reflexion retry loops with validation feedback</li>
+                <li>Shared agent memory (calibration store)</li>
               </ul>
             </div>
             <div>
@@ -150,7 +199,8 @@ export default function AboutPage() {
           <p>
             The platform is built around a set of specialised agents that run inside LangGraph
             workflows. Each agent is responsible for one narrow task and uses OpenAI structured
-            outputs validated by Zod schemas.
+            outputs validated by Zod schemas. Agents read calibration notes from shared memory
+            before running, and validation failures or reviewer overrides write new notes back.
           </p>
 
           <Separator />
@@ -179,18 +229,30 @@ export default function AboutPage() {
               <h3 className="font-medium text-foreground">Evidence Retrieval Agent</h3>
               <p className="text-sm">
                 Performs vector search over pgvector to retrieve comparable historical cases
-                (knowledge entries and evaluations). Downstream agents use this evidence to ground
-                recommendations in what happened before, not just the current candidate.
+                (knowledge entries and evaluations). Runs in two passes during candidate analysis:
+                once before gap analysis for calibration, and once after for gap-targeted evidence
+                (agentic RAG). Downstream agents use this evidence to ground recommendations in what
+                happened before, not just the current candidate.
               </p>
             </div>
 
             <div>
-              <h3 className="font-medium text-foreground">Gap Analysis + Question Agent</h3>
+              <h3 className="font-medium text-foreground">Gap Analysis Agent</h3>
               <p className="text-sm">
-                Compares a job&apos;s requirements against the candidate&apos;s profile and generates
-                a tailored interview question set in a single pass. Produces a match score, verdict,
-                strong skills, missing skills, partial matches, areas to validate, and candidate-specific
-                questions with expected signals and rationale.
+                Compares a job's requirements against the candidate's profile and produces a
+                match score, verdict, strong skills, missing skills, partial matches, and areas to
+                validate. Receives peer context (other candidates in the pipeline) so it can
+                differentiate between similarly-matched candidates. Reads calibration notes from
+                shared agent memory before running.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground">Question Agent</h3>
+              <p className="text-sm">
+                Generates a tailored interview question set based on the gap analysis and
+                gap-targeted evidence. Produces screening, deep technical, gap validation, and
+                experience validation questions with expected signals and rationale.
               </p>
             </div>
 
@@ -199,7 +261,9 @@ export default function AboutPage() {
               <p className="text-sm">
                 Evaluates an interview transcript against the planned question set. Scores technical
                 and communication separately, records signals hit and missed, and requires every
-                judgement to cite a direct quote.
+                judgement to cite a direct quote. Uses reflexion: if validation fails (e.g. a quote
+                is not found in the transcript), the agent retries with feedback. Reads calibration
+                notes from shared agent memory before running.
               </p>
             </div>
 
@@ -208,7 +272,9 @@ export default function AboutPage() {
               <p className="text-sm">
                 Scans for inconsistencies between the resume and the interview, such as seniority
                 mismatches, project-depth issues, contradictions, unrealistic claims, and timeline
-                problems. Returns GREEN, YELLOW, or RED levels. Advisory only.
+                problems. Returns GREEN, YELLOW, or RED levels. Advisory only. Uses reflexion: if
+                validation fails (e.g. a flag has no evidence), the agent retries with feedback.
+                Reads calibration notes from shared agent memory before running.
               </p>
             </div>
 
@@ -217,7 +283,8 @@ export default function AboutPage() {
               <p className="text-sm">
                 Synthesises the match analysis, transcript evaluation, and red flags into a decision
                 packet for a human reviewer. Recommends advance, hold, or reject, with a headline,
-                key evidence, open questions, and comparable historical cases.
+                key evidence, open questions, and comparable historical cases. Reads calibration
+                notes from shared agent memory before running.
               </p>
             </div>
           </div>
@@ -230,7 +297,7 @@ export default function AboutPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-muted-foreground">
           <p className="text-sm">
-            The main lifecycle is modelled as three LangGraph workflows:
+            The main lifecycle is modelled as four LangGraph workflows:
           </p>
           <ol className="list-decimal space-y-1 pl-5 text-sm">
             <li>
@@ -241,19 +308,61 @@ export default function AboutPage() {
               vectors.
             </li>
             <li>
-              <strong>Candidate analysis</strong> — load job and candidate → retrieve evidence → gap
-              analysis → persist analysis → generate questions → persist questions.
+              <strong>Candidate analysis</strong> — load → route analysis (supervisor) → load peer
+              context → retrieve evidence → gap analysis → retrieve gap evidence (agentic RAG) →
+              persist analysis → generate questions → persist questions.
             </li>
             <li>
-              <strong>Transcript review</strong> — load transcript → retrieve evidence → evaluate
-              transcript → persist evaluation → detect red flags → persist flags → synthesise review
-              → add to knowledge base.
+              <strong>Transcript review</strong> — load → retrieve evidence → [evaluate transcript
+              <code> || </code>detect red flags] (parallel, both with reflexion) → persist evaluation +
+              persist flags → synthesise review → add to knowledge base.
             </li>
           </ol>
+          <p className="text-sm">
+            The supervisor node inspects coverage signals and candidate seniority before analysis to
+            decide depth (minimal, standard, or deep). Cross-candidate reasoning feeds a summary of
+            the candidate pool into the Gap Analysis Agent. Reflexion loops retry agents on
+            validation failure with feedback. Shared agent memory persists calibration notes from
+            reviewer overrides and validation failures, which agents read before each run.
+          </p>
           <p className="text-sm">
             Vector indexes for job descriptions, resumes, questions, and evaluations feed the
             Evidence Retrieval Agent, giving the system an explicit memory of past decisions.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card id="about-orchestration-card">
+        <CardHeader>
+          <CardTitle>Durable task orchestration</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            Every agent run is tracked as typed tasks with idempotency keys, dependency graphs, and
+            persisted artifacts. This provides:
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              <strong>Task lifecycle</strong> — each agent invocation is a task with status
+              (pending, running, complete, failed, blocked), attempt count, and max attempts.
+            </li>
+            <li>
+              <strong>Typed artifacts</strong> — agent outputs are persisted as artifacts with
+              evidence claims, warnings, confidence scores, and schema versions, independent from
+              domain rows.
+            </li>
+            <li>
+              <strong>Output validation</strong> — transcript evaluation quotes are verified against
+              the source transcript; red flags must have evidence and consistent severity levels.
+            </li>
+            <li>
+              <strong>Event log</strong> — every agent start and completion is recorded as a typed
+              event for observability and replay.
+            </li>
+            <li>
+              <strong>Idempotency</strong> — tasks use unique idempotency keys so retries are safe.
+            </li>
+          </ul>
         </CardContent>
       </Card>
 

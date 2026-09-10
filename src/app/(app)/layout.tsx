@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const [{ data: profile }, { data: jobs }] = await Promise.all([
     db.from('users').select('full_name').eq('id', user.id).maybeSingle(),
-    db.from('jobs').select('id').eq('created_by', user.id),
+    db.from('jobs').select('id'),
   ]);
 
   let openFlagCount = 0;

@@ -26,6 +26,8 @@ import {
   startRun,
 } from '@/lib/graphs/run-log';
 import { createArtifact } from '@/lib/orchestration/contracts';
+import { readAgentMemory, type AgentMemoryNote } from '@/lib/orchestration/memory';
+import { withReflexion } from '@/lib/orchestration/reflexion';
 import {
   claimsFromTranscriptEvaluation,
   validateRedFlags,
@@ -63,6 +65,9 @@ const State = Annotation.Root({
   matchSummary: Annotation<MatchSummary | null>({ reducer: (_, b) => b, default: () => null }),
 
   evidence: Annotation<EvidenceItem[]>({ reducer: (_, b) => b, default: () => [] }),
+  evaluationCalibration: Annotation<AgentMemoryNote[]>({ reducer: (_, b) => b, default: () => [] }),
+  redFlagCalibration: Annotation<AgentMemoryNote[]>({ reducer: (_, b) => b, default: () => [] }),
+  reviewCalibration: Annotation<AgentMemoryNote[]>({ reducer: (_, b) => b, default: () => [] }),
   evaluation: Annotation<TranscriptEvaluation | null>({ reducer: (_, b) => b, default: () => null }),
   evaluationId: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
   redFlags: Annotation<RedFlagAnalysis | null>({ reducer: (_, b) => b, default: () => null }),
@@ -160,6 +165,14 @@ const graph = new StateGraph(State)
       throw new ApiError(422, 'Transcript is empty.');
     }
 
+    // Fetch calibration notes from shared agent memory for each agent that
+    // will run in this workflow. Notes are scoped to the job when possible.
+    const [evaluationCalibration, redFlagCalibration, reviewCalibration] = await Promise.all([
+      readAgentMemory({ agentName: 'Transcript Evaluation Agent', jobId: interview.job_id }),
+      readAgentMemory({ agentName: 'Red Flag Agent', jobId: interview.job_id }),
+      readAgentMemory({ agentName: 'Human Review Agent', jobId: interview.job_id }),
+    ]);
+
     return {
       jobId: interview.job_id,
       candidateId: interview.candidate_id,
@@ -171,6 +184,9 @@ const graph = new StateGraph(State)
       plannedQuestions: (questions.data ?? []) as PlannedQuestion[],
       requirements: (jobSkills.data ?? []).map((s: { skill: string }) => s.skill),
       matchSummary: (analysis.data as MatchSummary | null) ?? null,
+      evaluationCalibration,
+      redFlagCalibration,
+      reviewCalibration,
     };
   })
 
@@ -202,25 +218,30 @@ const graph = new StateGraph(State)
       });
     }
 
-    const evaluation = await runTranscriptAgent({
-      jobTitle: state.job!.title,
-      jobSummary: jobSummary(state.job!),
-      requirements: state.requirements,
-      candidateName: state.candidate!.full_name,
-      candidateSummary: state.candidate!.structured?.summary ?? 'not available',
-      questions: state.plannedQuestions,
-      transcript: state.transcriptText,
-      participants: state.participants,
-      evidence: state.evidence,
+    const evaluation = await withReflexion({
+      agentName: 'Transcript Evaluation Agent',
+      maxAttempts: 2,
+      jobId: state.jobId,
+      candidateId: state.candidateId,
+      runId: state.runId,
+      run: (_attempt, feedback) =>
+        runTranscriptAgent({
+          jobTitle: state.job!.title,
+          jobSummary: jobSummary(state.job!),
+          requirements: state.requirements,
+          candidateName: state.candidate!.full_name,
+          candidateSummary: state.candidate!.structured?.summary ?? 'not available',
+          questions: state.plannedQuestions,
+          transcript: state.transcriptText,
+          participants: state.participants,
+          evidence: state.evidence,
+          calibrationNotes: state.evaluationCalibration,
+          feedback: feedback.length > 0 ? feedback.join(' ') : undefined,
+        }),
+      validate: (output) => validateTranscriptEvaluation(output, state.transcriptText),
     });
 
     const issues = validateTranscriptEvaluation(evaluation, state.transcriptText);
-    const errors = issues.filter((issue) => issue.severity === 'error');
-    if (errors.length > 0) {
-      const message = errors.map((issue) => issue.message).join(' ');
-      if (state.evaluationTaskId) await failAgentTask(state.evaluationTaskId, message);
-      throw new ApiError(502, `Transcript Evaluation Agent output failed validation: ${message}`);
-    }
 
     if (state.runId) {
       const artifact = createArtifact({
@@ -301,24 +322,29 @@ const graph = new StateGraph(State)
       });
     }
 
-    const redFlags = await runRedFlagAgent({
-      jobTitle: state.job!.title,
-      seniority: state.job!.seniority,
-      requirements: state.requirements,
-      candidateName: state.candidate!.full_name,
-      candidateYears: state.candidate!.total_years_experience,
-      candidateHeadline: state.candidate!.headline,
-      resumeProfile: resumeProfileText(state.candidate!.structured),
-      transcript: state.transcriptText,
+    const redFlags = await withReflexion({
+      agentName: 'Red Flag Agent',
+      maxAttempts: 2,
+      jobId: state.jobId,
+      candidateId: state.candidateId,
+      runId: state.runId,
+      run: (_attempt, feedback) =>
+        runRedFlagAgent({
+          jobTitle: state.job!.title,
+          seniority: state.job!.seniority,
+          requirements: state.requirements,
+          candidateName: state.candidate!.full_name,
+          candidateYears: state.candidate!.total_years_experience,
+          candidateHeadline: state.candidate!.headline,
+          resumeProfile: resumeProfileText(state.candidate!.structured),
+          transcript: state.transcriptText,
+          calibrationNotes: state.redFlagCalibration,
+          feedback: feedback.length > 0 ? feedback.join(' ') : undefined,
+        }),
+      validate: (output) => validateRedFlags(output),
     });
 
     const issues = validateRedFlags(redFlags);
-    const errors = issues.filter((issue) => issue.severity === 'error');
-    if (errors.length > 0) {
-      const message = errors.map((issue) => issue.message).join(' ');
-      if (state.redFlagTaskId) await failAgentTask(state.redFlagTaskId, message);
-      throw new ApiError(502, `Red Flag Agent output failed validation: ${message}`);
-    }
 
     if (state.runId) {
       const artifact = createArtifact({
@@ -472,6 +498,7 @@ const graph = new StateGraph(State)
       evaluation: state.evaluation,
       redFlags: state.redFlags,
       evidence: state.evidence,
+      calibrationNotes: state.reviewCalibration,
     });
 
     return { review };

@@ -8,6 +8,7 @@ import {
   type JobSkillRow,
 } from '@/lib/domain/matching';
 import { displaySkill } from '@/lib/domain/skills';
+import type { AgentMemoryNote } from '@/lib/orchestration/memory';
 
 const SYSTEM = `You are the Gap Analysis Agent in a recruitment intelligence platform.
 You compare a job's requirements against a candidate's profile and produce an
@@ -30,7 +31,11 @@ Rules:
 - areas_to_validate must be things an interview can actually resolve. Do not list
   a missing skill as an area to validate unless the resume is ambiguous about it.
 - Historical cases are provided for calibration only. Never treat a past outcome as
-  a rule, and never mention a candidate from a past case by name.`;
+  a rule, and never mention a candidate from a past case by name.
+- When pipeline context about other candidates is provided, use it to differentiate
+  this candidate. If another candidate is strong where this one is weak, prioritise
+  that gap in areas_to_validate. Do not rank candidates against each other — focus
+  on what makes this candidate's interview worth conducting.`;
 
 const USER = `Assess this candidate against the job.
 
@@ -57,7 +62,9 @@ Requirements matched: {matchedList}
 Requirements with no match: {missingList}
 
 COMPARABLE HISTORICAL CASES
-{evidence}`;
+{evidence}
+{peerContext}
+{calibrationNotes}`;
 
 export interface GapAnalysisAgentResult {
   analysis: GapAnalysis;
@@ -77,6 +84,10 @@ export async function runGapAnalysisAgent(input: {
   candidateSkills: CandidateSkillRow[];
   candidateHistory: string;
   evidence: EvidenceItem[];
+  /** Summary of other candidates in the same pipeline for differentiation. */
+  peerContext?: string;
+  /** Calibration notes from shared agent memory. */
+  calibrationNotes?: AgentMemoryNote[];
 }): Promise<GapAnalysisAgentResult> {
   const coverage = computeCoverage(input.jobSkills, input.candidateSkills);
 
@@ -125,6 +136,12 @@ export async function runGapAnalysisAgent(input: {
       missingList:
         coverage.missing.map((m) => displaySkill(m.skill)).join(', ') || 'none',
       evidence: formatEvidence(input.evidence),
+      peerContext: input.peerContext
+        ? `\n\nPIPELINE CONTEXT\n${input.peerContext}\nUse this to differentiate this candidate from others in the pipeline. Prioritise questions that reveal whether this candidate stands out in areas where others are weak.`
+        : '',
+      calibrationNotes: input.calibrationNotes && input.calibrationNotes.length > 0
+        ? `\n\nCALIBRATION NOTES (from past runs — adjust your behavior accordingly)\n${input.calibrationNotes.map((n, i) => `Note ${i + 1} (${n.note_type}, ${Math.round(n.confidence * 100)}%): ${n.content}`).join('\n')}`
+        : '',
     },
   });
 

@@ -4,20 +4,26 @@ import { runEvidenceAgent, type EvidenceItem } from '@/lib/agents/evidence-agent
 import { runGapAnalysisAgent } from '@/lib/agents/gap-analysis-agent';
 import { runQuestionAgent } from '@/lib/agents/question-agent';
 import { candidateHistoryText } from '@/lib/domain/format';
-import type { CandidateSkillRow, JobSkillRow } from '@/lib/domain/matching';
+import { computeCoverage, type CandidateSkillRow, type JobSkillRow } from '@/lib/domain/matching';
 import { indexDocument } from '@/lib/ai/vector-store';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { ApiError, notFound } from '@/lib/api/handler';
 import { finishRun, NodeTimer, startRun } from '@/lib/graphs/run-log';
+import { readAgentMemory, type AgentMemoryNote } from '@/lib/orchestration/memory';
 
 /**
  * Candidate Analysis workflow (Features 3 + 4).
  *
- *   load -> retrieve_evidence -> gap_analysis -> persist_analysis
+ *   load -> route_analysis -> retrieve_evidence -> gap_analysis
+ *        -> retrieve_gap_evidence -> persist_analysis
  *        -> question_generation -> persist_questions
  *
- * Evidence retrieval runs before the analysis so the gap assessment and the
- * question set are both grounded in comparable historical cases.
+ * The supervisor (route_analysis) inspects coverage signals and candidate
+ * seniority to decide analysis depth: minimal (skip evidence), standard,
+ * or deep (extra evidence retrieval).
+ *
+ * Evidence retrieval runs in two passes: once before gap analysis for
+ * calibration, and once after for gap-targeted evidence (agentic RAG).
  */
 
 const State = Annotation.Root({
@@ -30,8 +36,12 @@ const State = Annotation.Root({
   candidate: Annotation<CandidateRecord | null>({ reducer: (_, b) => b, default: () => null }),
   jobSkills: Annotation<JobSkillRow[]>({ reducer: (_, b) => b, default: () => [] }),
   candidateSkills: Annotation<CandidateSkillRow[]>({ reducer: (_, b) => b, default: () => [] }),
+  analysisDepth: Annotation<'minimal' | 'standard' | 'deep'>({ reducer: (_, b) => b, default: () => 'standard' }),
 
   evidence: Annotation<EvidenceItem[]>({ reducer: (_, b) => b, default: () => [] }),
+  gapEvidence: Annotation<EvidenceItem[]>({ reducer: (_, b) => b, default: () => [] }),
+  peerContext: Annotation<string>({ reducer: (_, b) => b, default: () => '' }),
+  gapCalibration: Annotation<AgentMemoryNote[]>({ reducer: (_, b) => b, default: () => [] }),
   gap: Annotation<GapAnalysis | null>({ reducer: (_, b) => b, default: () => null }),
   coverageScore: Annotation<number>({ reducer: (_, b) => b, default: () => 0 }),
   matchAnalysisId: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
@@ -93,15 +103,96 @@ const graph = new StateGraph(State)
       throw new ApiError(422, 'Upload and parse a resume before running analysis.');
     }
 
+    const gapCalibration = await readAgentMemory({
+      agentName: 'Gap Analysis Agent',
+      jobId: state.jobId,
+    });
+
     return {
       job: job.data as JobRecord,
       candidate: candidate.data as CandidateRecord,
       jobSkills: (jobSkills.data ?? []) as JobSkillRow[],
       candidateSkills: (candidateSkills.data ?? []) as CandidateSkillRow[],
+      gapCalibration,
     };
   })
 
+  .addNode('route_analysis', async (state) => {
+    // Supervisor: inspect the candidate profile and coverage signals to
+    // decide how deep the analysis should go.
+    //   minimal  — high coverage + senior candidate: skip evidence retrieval
+    //   standard — normal path
+    //   deep     — low coverage or junior candidate: extra evidence retrieval
+    const coverage = computeCoverage(state.jobSkills, state.candidateSkills);
+    const years = state.candidate?.total_years_experience ?? 0;
+
+    let depth: 'minimal' | 'standard' | 'deep';
+    if (coverage.score >= 80 && years >= 8) {
+      depth = 'minimal';
+    } else if (coverage.score < 40 || (years > 0 && years < 3)) {
+      depth = 'deep';
+    } else {
+      depth = 'standard';
+    }
+
+    console.log(
+      `[candidate-analysis] supervisor routing: ${depth} (coverage ${coverage.score}, years ${years})`,
+    );
+    return { analysisDepth: depth };
+  })
+
+  .addNode('load_peer_context', async (state) => {
+    // Cross-candidate reasoning: fetch a summary of other candidates in the
+    // same job pipeline so the Gap Analysis Agent can differentiate between
+    // similarly-matched candidates and prioritise questions that distinguish
+    // this candidate from the pool.
+    const db = createSupabaseAdminClient();
+
+    try {
+      const { data: peers } = await db
+        .from('match_analyses')
+        .select('candidate_id, match_score, verdict, strong_skills, missing_skills')
+        .in(
+          'candidate_id',
+          (
+            await db
+              .from('candidates')
+              .select('id')
+              .eq('job_id', state.jobId)
+              .neq('id', state.candidateId)
+          ).data?.map((c) => c.id) ?? [],
+        )
+        .order('match_score', { ascending: false })
+        .limit(5);
+
+      if (!peers || peers.length === 0) {
+        return { peerContext: '' };
+      }
+
+      const summary = peers
+        .map((p, i) => {
+          const strong = (p.strong_skills ?? []).map((s: { skill: string }) => s.skill).join(', ');
+          const missing = (p.missing_skills ?? []).map((s: { skill: string }) => s.skill).join(', ');
+          return `Candidate ${i + 1}: match score ${p.match_score}, verdict ${p.verdict ?? 'n/a'}. Strong: ${strong || 'none'}. Missing: ${missing || 'none'}.`;
+        })
+        .join('\n');
+
+      return {
+        peerContext: `OTHER CANDIDATES IN THIS PIPELINE (for differentiation, not comparison):\n${summary}`,
+      };
+    } catch (error) {
+      console.error('[candidate-analysis] peer context load failed, continuing', error);
+      return { peerContext: '' };
+    }
+  })
+
   .addNode('retrieve_evidence', async (state) => {
+    // Skip evidence retrieval for minimal-depth analyses.
+    if (state.analysisDepth === 'minimal') {
+      console.log('[candidate-analysis] skipping evidence retrieval (minimal depth)');
+      return { evidence: [] };
+    }
+
     const job = state.job!;
     const candidate = state.candidate!;
 
@@ -136,9 +227,43 @@ const graph = new StateGraph(State)
       candidateSkills: state.candidateSkills,
       candidateHistory: candidateHistoryText(candidate.structured),
       evidence: state.evidence,
+      peerContext: state.peerContext,
+      calibrationNotes: state.gapCalibration,
     });
 
     return { gap: analysis, coverageScore };
+  })
+
+  .addNode('retrieve_gap_evidence', async (state) => {
+    // Iterative evidence retrieval (agentic RAG): after the gap analysis
+    // identifies missing skills, run a second retrieval pass targeted at
+    // those gaps. This gives the question agent historical context on how
+    // similar gaps were validated in past interviews.
+    const gap = state.gap!;
+    const missingSkills = gap.missing_skills.map((s) => s.skill);
+    const partialSkills = gap.partial_skills.map((s) => s.skill);
+
+    const gapQuery = [
+      `Role: ${state.job!.title}`,
+      `Validating gaps for candidate: ${state.candidate!.full_name}`,
+      `Missing skills: ${missingSkills.join(', ') || 'none'}`,
+      `Partial skills: ${partialSkills.join(', ') || 'none'}`,
+      `Areas to validate: ${gap.areas_to_validate.map((a) => a.area).join('; ') || 'none'}`,
+    ].join('\n');
+
+    try {
+      const gapEvidence = await runEvidenceAgent({
+        query: gapQuery,
+        excludeCandidateId: state.candidateId,
+        ownerTypes: ['knowledge_entry', 'evaluation'],
+        limit: state.analysisDepth === 'deep' ? 6 : 3,
+        minSimilarity: 0.15,
+      });
+      return { gapEvidence };
+    } catch (error) {
+      console.error('[candidate-analysis] gap evidence retrieval failed, continuing', error);
+      return { gapEvidence: [] };
+    }
   })
 
   .addNode('question_generation', async (state) => {
@@ -155,7 +280,7 @@ const graph = new StateGraph(State)
       candidateSkills: state.candidateSkills.map((skill) => skill.skill),
       candidateHistory: candidateHistoryText(candidate.structured),
       gap,
-      evidence: state.evidence,
+      evidence: [...state.evidence, ...state.gapEvidence],
     });
 
     return { questions };
@@ -258,9 +383,12 @@ const graph = new StateGraph(State)
   })
 
   .addEdge(START, 'load')
-  .addEdge('load', 'retrieve_evidence')
+  .addEdge('load', 'route_analysis')
+  .addEdge('route_analysis', 'load_peer_context')
+  .addEdge('load_peer_context', 'retrieve_evidence')
   .addEdge('retrieve_evidence', 'gap_analysis')
-  .addEdge('gap_analysis', 'persist_analysis')
+  .addEdge('gap_analysis', 'retrieve_gap_evidence')
+  .addEdge('retrieve_gap_evidence', 'persist_analysis')
   .addEdge('persist_analysis', 'question_generation')
   .addEdge('question_generation', 'persist_questions')
   .addEdge('persist_questions', END);
