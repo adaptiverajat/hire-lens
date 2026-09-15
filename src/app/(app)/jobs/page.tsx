@@ -7,6 +7,7 @@ import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/sup
 import { displaySkill } from '@/lib/domain/skills';
 
 export const metadata = { title: 'Jobs - HireLens' };
+export const dynamic = 'force-dynamic';
 
 export default async function JobsPage() {
   const supabase = await createSupabaseServerClient();

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { maskEmail, maskName } from '@/lib/utils/mask';
 import { getDemoEnabled } from '@/lib/demo/server-store';
@@ -29,6 +29,8 @@ import type {
 
 type Props = { params: Promise<{ candidateId: string }> };
 
+export const dynamic = 'force-dynamic';
+
 export default async function CandidatePage({ params }: Props) {
   const { candidateId } = await params;
 
@@ -45,7 +47,7 @@ export default async function CandidatePage({ params }: Props) {
     .eq('id', candidateId)
     .maybeSingle();
 
-  if (!candidate) notFound();
+  if (!candidate) redirect('/candidates');
 
   // Shared workspace — any authenticated user can access any job.
   const { data: job } = await db
@@ -54,7 +56,7 @@ export default async function CandidatePage({ params }: Props) {
     .eq('id', candidate.job_id)
     .maybeSingle();
 
-  if (!job) notFound();
+  if (!job) redirect('/candidates');
 
   const demo = await getDemoEnabled();
 

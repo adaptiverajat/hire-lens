@@ -85,7 +85,10 @@ export function UnderTheHood() {
         }
       })
       .catch(() => {
-        if (!cancelled) setCurrentCandidateName('');
+        if (!cancelled) {
+          setCurrentCandidateName('');
+          demo.removeCandidateLog(currentCandidateId);
+        }
       });
     return () => { cancelled = true; };
   }, [currentCandidateId, demo.state.candidateLogs]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -112,7 +115,8 @@ export function UnderTheHood() {
           }
         })
         .catch(() => {
-          // Best-effort — leave as Unknown candidate.
+          // Remove deleted candidates so the stale ID is not retried forever.
+          demo.removeCandidateLog(entry.candidateId);
         });
     }
     return () => { cancelled = true; };
@@ -180,40 +184,41 @@ export function UnderTheHood() {
 
   // Build inferred agent status for ALL candidates (used by the agent-runs list)
   // and for the current candidate (used by the WorkflowPath).
-  // Inference: if agent at lifecycle index N is complete, all prior agents are
-  // implicitly complete. If agent at index N is running, all prior agents are
-  // implicitly complete (they must have finished for N to start).
+  // Inference: the first running agent is the current stage. Earlier stages
+  // are complete, while later stages remain pending until they run.
   const inferredLogs = useMemo(() => {
     return Object.values(demo.state.candidateLogs)
       .map((entry) => {
         const statusMap = new Map(entry.agents.map((a) => [a.agent, a.status]));
-
-        // Find the highest lifecycle index that has any status (running or complete).
-        // Everything before that index is implicitly complete.
-        let highestActiveIdx = -1;
-        for (let i = 0; i < LIFECYCLE_ORDER.length; i++) {
-          const s = statusMap.get(LIFECYCLE_ORDER[i]);
-          if (s === 'complete' || s === 'running') {
-            highestActiveIdx = i;
-          }
-        }
+        const runningIndex = LIFECYCLE_ORDER.findIndex(
+          (agent) => statusMap.get(agent) === 'running',
+        );
+        const highestCompletedIndex = LIFECYCLE_ORDER.reduce(
+          (highest, agent, index) =>
+            statusMap.get(agent) === 'complete' ? index : highest,
+          -1,
+        );
 
         const inferred = LIFECYCLE_ORDER.map((agentName, i) => {
           const existing = entry.agents.find((a) => a.agent === agentName);
-          if (i < highestActiveIdx) {
-            // Before the highest active agent → must have completed
-            return { agent: agentName, status: 'complete' as const, timestamp: existing?.timestamp ?? entry.updatedAt };
-          }
-          if (i === highestActiveIdx && existing) {
-            // The highest active agent — keep its actual status (running or complete)
+
+          if (existing?.status === 'failed') {
             return existing;
           }
-          if (i === highestActiveIdx && !existing) {
-            // Shouldn't happen, but safety
-            return { agent: agentName, status: 'complete' as const, timestamp: entry.updatedAt };
+
+          if (runningIndex >= 0 && i < runningIndex) {
+            return { agent: agentName, status: 'complete' as const, timestamp: existing?.timestamp ?? entry.updatedAt };
           }
-          // Beyond the highest active agent — preserve explicitly logged status if any
-          if (existing) return existing;
+
+          if (runningIndex >= 0 && i === runningIndex) {
+            return existing ?? { agent: agentName, status: 'running' as const, timestamp: entry.updatedAt };
+          }
+
+          if (runningIndex < 0 && i <= highestCompletedIndex) {
+            return { agent: agentName, status: 'complete' as const, timestamp: existing?.timestamp ?? entry.updatedAt };
+          }
+
+          if (existing?.status === 'complete') return existing;
           return null;
         }).filter(Boolean) as CandidateAgentLog[];
         return { ...entry, agents: inferred };
@@ -270,16 +275,21 @@ export function UnderTheHood() {
     return { tokenByAgentAcrossAll: byAgent, totalTokensAcrossAllCandidates: total };
   }, [inferredLogs]);
 
-  // The currently executing workflow — a candidate that has at least one
-  // agent in 'running' state. Falls back to the most recently updated
-  // candidate if nothing is actively running.
+  // Prefer the workflow for the page's current candidate, then any active
+  // workflow, then the most recently updated workflow.
   const currentWorkflowEntry = useMemo(() => {
     if (allCandidateStatus.length === 0) return null;
+
+    const currentCandidate = currentCandidateId
+      ? allCandidateStatus.find((entry) => entry.candidateId === currentCandidateId)
+      : undefined;
+    if (currentCandidate) return currentCandidate;
+
     const running = allCandidateStatus.find((c) =>
       Object.values(c.status).some((s) => s === 'running'),
     );
     return running ?? allCandidateStatus[0];
-  }, [allCandidateStatus]);
+  }, [allCandidateStatus, currentCandidateId]);
 
   // The active agent for the prompt selector — first running agent, or first completed.
   const activeAgent = useMemo(() => {
@@ -312,7 +322,7 @@ export function UnderTheHood() {
     });
   }, [selectedAgent, override, defaultPrompt]);
 
-  if (!demo.state.enabled) return null;
+  if (!demo.state.enabled || !demo.state.showUnderTheHood) return null;
 
   return (
     <>
@@ -339,7 +349,7 @@ export function UnderTheHood() {
       {!minimized && (
         <CardContent className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-3">
-            <section id="under-the-hood-token-usage" className="lg:col-span-3">
+            {demo.state.showTokens && <section id="under-the-hood-token-usage" className="lg:col-span-3">
               <div className="mb-2 flex items-center gap-2">
                 <h3 className="text-sm font-medium">Token usage</h3>
                 <Badge variant="outline" className="text-[10px] font-mono">
@@ -391,7 +401,7 @@ export function UnderTheHood() {
                   parse a resume, analyse a candidate, or evaluate a transcript).
                 </p>
               )}
-            </section>
+            </section>}
 
             <section id="under-the-hood-current-workflow" className="lg:col-span-3">
               <div className="mb-2 flex items-center gap-2 text-sm font-medium">
@@ -453,7 +463,7 @@ export function UnderTheHood() {
                             {displayName(entry.name, demo.state.enabled)}
                           </p>
                           <div className="flex items-center gap-2">
-                            {entry.agents.some((a) => a.tokenUsage) && (
+                            {demo.state.showTokens && entry.agents.some((a) => a.tokenUsage) && (
                               <span className="font-mono text-[9px] text-muted-foreground/70">
                                 {entry.agents.reduce((sum, a) => sum + (a.tokenUsage?.totalTokens ?? 0), 0).toLocaleString()} tok
                               </span>
@@ -465,7 +475,7 @@ export function UnderTheHood() {
                         </div>
                         <ul className="space-y-1">
                           {entry.agents.map((agentLog) => (
-                            <AgentStatusRow key={agentLog.agent} agentLog={agentLog} />
+                            <AgentStatusRow key={agentLog.agent} agentLog={agentLog} showTokens={demo.state.showTokens} />
                           ))}
                         </ul>
                       </div>
@@ -604,7 +614,7 @@ export function UnderTheHood() {
   );
 }
 
-function AgentStatusRow({ agentLog }: { agentLog: CandidateAgentLog }) {
+function AgentStatusRow({ agentLog, showTokens }: { agentLog: CandidateAgentLog; showTokens: boolean }) {
   const icon = agentLog.status === 'running' ? (
     <Loader2 className="h-3 w-3 animate-spin text-amber-500" />
   ) : agentLog.status === 'complete' ? (
@@ -624,7 +634,7 @@ function AgentStatusRow({ agentLog }: { agentLog: CandidateAgentLog }) {
       )}>
         {agentLog.agent}
       </span>
-      {agentLog.tokenUsage && (
+      {showTokens && agentLog.tokenUsage && (
         <span className="font-mono text-[9px] text-muted-foreground/70" title={`Prompt: ${agentLog.tokenUsage.promptTokens} · Completion: ${agentLog.tokenUsage.completionTokens}`}>
           {agentLog.tokenUsage.totalTokens.toLocaleString()} tok
         </span>

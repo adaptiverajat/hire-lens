@@ -36,6 +36,8 @@ export interface CandidateLogEntry {
 
 export interface DemoState {
   enabled: boolean;
+  showUnderTheHood: boolean;
+  showTokens: boolean;
   credentials: DemoCredentials;
   prompts: Record<string, PromptOverride>;
   completedAgents: string[];
@@ -46,6 +48,8 @@ const STORAGE_KEY = 'hirelens_demo';
 
 const DEFAULT_STATE: DemoState = {
   enabled: false,
+  showUnderTheHood: true,
+  showTokens: true,
   credentials: {
     openaiKey: '',
     supabaseUrl: '',
@@ -73,6 +77,8 @@ interface DemoContextValue {
   state: DemoState;
   loaded: boolean;
   setEnabled: (enabled: boolean) => void;
+  setShowUnderTheHood: (show: boolean) => void;
+  setShowTokens: (show: boolean) => void;
   setCredentials: (credentials: Partial<DemoCredentials>) => void;
   getPrompt: (agent: string) => PromptOverride | undefined;
   setPrompt: (agent: string, prompt: PromptOverride) => void;
@@ -81,6 +87,7 @@ interface DemoContextValue {
   resetCompletedAgents: () => void;
   logCandidateAgent: (candidateId: string, name: string, agent: string, status: 'running' | 'complete' | 'failed', tokenUsage?: TokenUsage) => void;
   setCandidateName: (candidateId: string, name: string) => void;
+  removeCandidateLog: (candidateId: string) => void;
   clearCandidateLogs: () => void;
 }
 
@@ -103,6 +110,16 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
   const setEnabled = useCallback((enabled: boolean) => {
     setState((prev) => ({ ...prev, enabled }));
     document.cookie = `hirelens_demo=${enabled}; path=/; max-age=31536000`;
+  }, []);
+
+  const setShowUnderTheHood = useCallback((showUnderTheHood: boolean) => {
+    setState((prev) => ({ ...prev, showUnderTheHood }));
+    document.cookie = `hirelens_show_under_the_hood=${showUnderTheHood}; path=/; max-age=31536000; samesite=lax`;
+  }, []);
+
+  const setShowTokens = useCallback((showTokens: boolean) => {
+    setState((prev) => ({ ...prev, showTokens }));
+    document.cookie = `hirelens_show_tokens=${showTokens}; path=/; max-age=31536000; samesite=lax`;
   }, []);
 
   const setCredentials = useCallback((credentials: Partial<DemoCredentials>) => {
@@ -240,13 +257,22 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
     });
   }, []);
 
+  const removeCandidateLog = useCallback((candidateId: string) => {
+    setState((prev) => {
+      if (!prev.candidateLogs[candidateId]) return prev;
+      const candidateLogs = { ...prev.candidateLogs };
+      delete candidateLogs[candidateId];
+      return { ...prev, candidateLogs };
+    });
+  }, []);
+
   const clearCandidateLogs = useCallback(() => {
     setState((prev) => ({ ...prev, candidateLogs: {} }));
   }, []);
 
   return (
     <DemoContext.Provider
-      value={{ state, loaded, setEnabled, setCredentials, getPrompt, setPrompt, resetPrompt, markAgentComplete, resetCompletedAgents, logCandidateAgent, setCandidateName, clearCandidateLogs }}
+      value={{ state, loaded, setEnabled, setShowUnderTheHood, setShowTokens, setCredentials, getPrompt, setPrompt, resetPrompt, markAgentComplete, resetCompletedAgents, logCandidateAgent, setCandidateName, removeCandidateLog, clearCandidateLogs }}
     >
       {children}
     </DemoContext.Provider>

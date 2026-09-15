@@ -7,6 +7,7 @@ import { CandidatesListWithExport } from '@/components/candidates/post-interview
 import type { EvaluationRow, FeedbackRow, FlagRowFull, InterviewRow } from '@/types/domain';
 
 export const metadata = { title: 'Candidates - HireLens' };
+export const dynamic = 'force-dynamic';
 
 export default async function CandidatesPage() {
   const demo = await getDemoEnabled();

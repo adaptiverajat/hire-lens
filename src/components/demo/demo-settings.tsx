@@ -41,6 +41,44 @@ export function DemoSettings() {
           </div>
         </div>
 
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="show-under-the-hood"
+            checked={demo.state.showUnderTheHood}
+            onCheckedChange={(checked) => {
+              demo.setShowUnderTheHood(checked === true);
+              startTransition(() => router.refresh());
+            }}
+          />
+          <div>
+            <Label htmlFor="show-under-the-hood" className="font-medium">
+              Show Under the hood
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Show or hide the agent workflow panel when Demo mode is enabled.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="show-tokens"
+            checked={demo.state.showTokens}
+            onCheckedChange={(checked) => {
+              demo.setShowTokens(checked === true);
+              startTransition(() => router.refresh());
+            }}
+          />
+          <div>
+            <Label htmlFor="show-tokens" className="font-medium">
+              Show token usage
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Show or hide token KPIs and token details throughout the application.
+            </p>
+          </div>
+        </div>
+
         {demo.state.enabled ? (
           <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 p-4">
             <p className="text-sm text-muted-foreground">

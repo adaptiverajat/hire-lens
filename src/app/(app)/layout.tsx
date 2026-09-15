@@ -3,6 +3,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { DemoProvider } from '@/lib/demo/store';
 import { getDemoEnabled } from '@/lib/demo/server-store';
 import { UnderTheHood } from '@/components/demo/under-the-hood';
+import { RunningAgentSummary } from '@/components/demo/running-agent-summary';
 import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -43,6 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         />
         <main className="flex-1 overflow-x-hidden">
           <div className="mx-auto max-w-6xl px-8 py-8">
+            <RunningAgentSummary />
             {children}
             <UnderTheHood />
           </div>

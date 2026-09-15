@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { maskEmail, maskName } from '@/lib/utils/mask';
 import { getDemoEnabled } from '@/lib/demo/server-store';
 import { PageHeader } from '@/components/shared/page-header';
@@ -19,6 +19,8 @@ import type { JdExtraction } from '@/lib/agents/schemas';
 
 type Props = { params: Promise<{ jobId: string }> };
 
+export const dynamic = 'force-dynamic';
+
 export default async function JobDetailPage({ params }: Props) {
   const { jobId } = await params;
 
@@ -35,7 +37,7 @@ export default async function JobDetailPage({ params }: Props) {
     .eq('id', jobId)
     .maybeSingle();
 
-  if (!job) notFound();
+  if (!job) redirect('/jobs');
 
   const demo = await getDemoEnabled();
 

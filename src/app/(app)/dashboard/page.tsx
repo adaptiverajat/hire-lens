@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { AlertCircle, Briefcase, Cpu, Gauge, Layers } from 'lucide-react';
 import { maskName } from '@/lib/utils/mask';
 import { getDemoEnabled } from '@/lib/demo/server-store';
+import { getShowTokens } from '@/lib/demo/server-store';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState, StatCard, StatusBadge } from '@/components/shared/indicators';
 import { ButtonLink } from '@/components/shared/button-link';
@@ -21,6 +22,7 @@ const WORKFLOW_LABELS: Record<string, string> = {
 
 export default async function DashboardPage() {
   const demo = await getDemoEnabled();
+  const showTokens = await getShowTokens();
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -49,10 +51,12 @@ export default async function DashboardPage() {
   ]);
 
   // Fetch ALL agent runs for token usage aggregation (not just the latest 8).
-  const { data: allRuns } = await db
-    .from('agent_runs')
-    .select('id, workflow, status, started_at, output, candidate_id')
-    .order('started_at', { ascending: false });
+  const { data: allRuns } = showTokens
+    ? await db
+        .from('agent_runs')
+        .select('id, workflow, status, started_at, output, candidate_id')
+        .order('started_at', { ascending: false })
+    : { data: [] };
 
   const candidateRows = candidates.data ?? [];
 
@@ -131,27 +135,31 @@ export default async function DashboardPage() {
               hint={urgentOpenJobs === 1 ? '1 priority hire' : `${urgentOpenJobs} priority hires`}
               icon={<AlertCircle className="size-5" aria-hidden />}
             />
-            <StatCard
-              id="stat-total-token-usage"
-              label="Total token usage"
-              value={totalTokenUsage.toLocaleString()}
-              hint={`${candidatesWithTokens.size} candidates`}
-              icon={<Cpu className="size-5" aria-hidden />}
-            />
-            <StatCard
-              id="stat-token-usage-month"
-              label="Tokens this month"
-              value={tokenUsageThisMonth.toLocaleString()}
-              hint={now.toLocaleString('default', { month: 'long' })}
-              icon={<Layers className="size-5" aria-hidden />}
-            />
-            <StatCard
-              id="stat-avg-token-per-candidate"
-              label="Avg. tokens / candidate"
-              value={avgTokenPerCandidate.toLocaleString()}
-              hint={candidatesWithTokens.size > 0 ? `${candidatesWithTokens.size} candidates` : 'no data'}
-              icon={<Gauge className="size-5" aria-hidden />}
-            />
+            {showTokens && (
+              <>
+                <StatCard
+                  id="stat-total-token-usage"
+                  label="Total token usage"
+                  value={totalTokenUsage.toLocaleString()}
+                  hint={`${candidatesWithTokens.size} candidates`}
+                  icon={<Cpu className="size-5" aria-hidden />}
+                />
+                <StatCard
+                  id="stat-token-usage-month"
+                  label="Tokens this month"
+                  value={tokenUsageThisMonth.toLocaleString()}
+                  hint={now.toLocaleString('default', { month: 'long' })}
+                  icon={<Layers className="size-5" aria-hidden />}
+                />
+                <StatCard
+                  id="stat-avg-token-per-candidate"
+                  label="Avg. tokens / candidate"
+                  value={avgTokenPerCandidate.toLocaleString()}
+                  hint={candidatesWithTokens.size > 0 ? `${candidatesWithTokens.size} candidates` : 'no data'}
+                  icon={<Gauge className="size-5" aria-hidden />}
+                />
+              </>
+            )}
           </section>
 
           <section id="dashboard-jobs-section">

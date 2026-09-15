@@ -30,6 +30,11 @@ export async function getDemoEnabled(): Promise<boolean> {
   return cookieStore.get('hirelens_demo')?.value !== 'false';
 }
 
+export async function getShowTokens(): Promise<boolean> {
+  const cookieStore = await cookies();
+  return cookieStore.get('hirelens_show_tokens')?.value !== 'false';
+}
+
 export function parseDemoHeaders(headers: Headers): DemoServerContext {
   const enabled = headers.get('x-demo-enabled') === 'true';
 

@@ -77,7 +77,7 @@ export default function AboutPage() {
               the interview (advisory only; never auto-rejects).
             </li>
             <li>
-              <strong>Reflexion loops</strong> — when an agent's output fails validation, it
+              <strong>Reflexion loops</strong> — when an agent&apos;s output fails validation, it
               gets a second attempt with feedback describing what went wrong. Systematic failures
               are written to shared agent memory as bias warnings.
             </li>
@@ -102,7 +102,7 @@ export default function AboutPage() {
             </li>
             <li>
               <strong>Pre-interview export</strong> — generates a printable PDF report per candidate
-              with match analysis, strong areas, gaps, interview questions, and "look for"
+              with match analysis, strong areas, gaps, interview questions, and &quot;look for&quot;
               signals before the interview.
             </li>
             <li>
@@ -239,7 +239,7 @@ export default function AboutPage() {
             <div>
               <h3 className="font-medium text-foreground">Gap Analysis Agent</h3>
               <p className="text-sm">
-                Compares a job's requirements against the candidate's profile and produces a
+                Compares a job&apos;s requirements against the candidate&apos;s profile and produces a
                 match score, verdict, strong skills, missing skills, partial matches, and areas to
                 validate. Receives peer context (other candidates in the pipeline) so it can
                 differentiate between similarly-matched candidates. Reads calibration notes from
