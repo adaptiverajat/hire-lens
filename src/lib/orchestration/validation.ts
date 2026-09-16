@@ -7,12 +7,100 @@ export interface ValidationIssue {
   message: string;
 }
 
+/**
+ * Normalize text for quote matching: lowercase, collapse all whitespace,
+ * strip surrounding quote marks and trailing punctuation.
+ */
+function normalizeForQuoteMatch(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^["'""''\s]+|["'""''\s.!?,:;]+$/g, '');
+}
+
+/**
+ * Tokenize text into lowercase word tokens, stripping punctuation and
+ * ellipsis markers (…, ..., . . .) that LLMs insert to abbreviate quotes.
+ */
+function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[…]/g, ' ')
+    .replace(/\.\.\./g, ' ')
+    .replace(/\.\s\.\s\./g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+}
+
+/**
+ * Check whether a quote appears in a source text using token-based fuzzy
+ * matching. This tolerates the surface-level alterations LLMs commonly make
+ * even when asked to copy verbatim:
+ *
+ * - Ellipsis insertion ("..." to abbreviate mid-quote) — stripped before match
+ * - Minor word substitutions ("must" vs "needs") — up to 20% token mismatch
+ * - Small insertions in the source — the window is 1.5x the quote length
+ *
+ * The algorithm slides a window (1.5x the quote token count) across the
+ * source and checks what fraction of quote tokens appear in the window using
+ * multiset (frequency) intersection. If >= 80% of quote tokens are found in
+ * any window, the quote is accepted. This rejects genuine paraphrases and
+ * fabrications (which have low word overlap with any region) while accepting
+ * quotes that are substantively verbatim with minor alterations.
+ *
+ * A fast path uses exact normalized substring matching before falling back to
+ * the fuzzy token matcher.
+ */
+function quoteInSource(quote: string, source: string): boolean {
+  // Fast path: exact normalized substring match.
+  const nq = normalizeForQuoteMatch(quote);
+  const ns = normalizeForQuoteMatch(source);
+  if (nq.length >= 8 && ns.includes(nq)) return true;
+
+  // Fallback: fuzzy token-based window matching.
+  const qTokens = tokenize(quote);
+  const sTokens = tokenize(source);
+
+  if (qTokens.length < 3) return false;
+
+  const minMatchRatio = 0.8;
+  const windowSize = Math.ceil(qTokens.length * 1.5);
+
+  // Build a frequency map for quote tokens (multiset).
+  const qCounts = new Map<string, number>();
+  for (const t of qTokens) qCounts.set(t, (qCounts.get(t) ?? 0) + 1);
+
+  for (let i = 0; i <= sTokens.length - 3; i++) {
+    const windowEnd = Math.min(i + windowSize, sTokens.length);
+    if (windowEnd - i < 3) continue;
+
+    // Build a frequency map for the current window.
+    const wCounts = new Map<string, number>();
+    for (let j = i; j < windowEnd; j++) {
+      const t = sTokens[j];
+      wCounts.set(t, (wCounts.get(t) ?? 0) + 1);
+    }
+
+    // Count multiset intersection: for each unique quote token, how many
+    // appear in the window (capped at the quote's count).
+    let matched = 0;
+    for (const [token, count] of qCounts) {
+      matched += Math.min(count, wCounts.get(token) ?? 0);
+    }
+
+    if (matched / qTokens.length >= minMatchRatio) return true;
+  }
+
+  return false;
+}
+
 export function validateTranscriptEvaluation(
   evaluation: TranscriptEvaluation,
   transcript: string,
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  const source = transcript.toLowerCase();
   const evidence = [
     ...evaluation.technical_assessment.evidence,
     ...evaluation.communication_assessment.evidence,
@@ -27,11 +115,11 @@ export function validateTranscriptEvaluation(
   }
 
   for (const quote of evidence) {
-    if (quote.trim().length < 8 || !source.includes(quote.toLowerCase().trim())) {
+    if (!quoteInSource(quote, transcript)) {
       issues.push({
         code: 'unsupported_transcript_quote',
         severity: 'error',
-        message: 'Transcript evaluation contains a quote that is not present in the source transcript.',
+        message: `Quote not found in transcript (copy the exact words from the transcript, do not paraphrase or insert "..."): "${quote.slice(0, 120)}"`,
       });
     }
   }
