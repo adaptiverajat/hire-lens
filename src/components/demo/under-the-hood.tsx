@@ -45,11 +45,17 @@ function candidateIdFromPath(pathname: string): string | undefined {
   return match?.[1];
 }
 
+function jobIdFromPath(pathname: string): string | undefined {
+  const match = pathname.match(/\/jobs\/([a-f0-9-]+)/);
+  return match?.[1];
+}
+
 export function UnderTheHood() {
   const demo = useDemo();
   const pathname = usePathname() ?? '';
   const stages = useMemo(() => getWorkflowStages(pathname), [pathname]);
   const currentCandidateId = useMemo(() => candidateIdFromPath(pathname), [pathname]);
+  const currentJobId = useMemo(() => jobIdFromPath(pathname), [pathname]);
 
   const [minimized, setMinimized] = useState(false);
   const [traces, setTraces] = useState<Trace[]>([]);
@@ -163,6 +169,15 @@ export function UnderTheHood() {
             d.markAgentComplete(detail.agent);
           }
         }
+      } else if (detail.jobId && detail.agent === 'JD Agent') {
+        const agentUsage = detail.tokenUsage?.[detail.agent];
+        d.logJobAgent(
+          detail.jobId,
+          detail.agent,
+          detail.type === 'start' ? 'running' : detail.error ? 'failed' : 'complete',
+          agentUsage,
+        );
+        if (detail.type === 'finish' && !detail.error) d.markAgentComplete(detail.agent);
       }
     };
 
@@ -254,11 +269,20 @@ export function UnderTheHood() {
     });
   }, [inferredLogs]);
 
+  const currentJobRun = useMemo(() => {
+    const entry = currentJobId ? demo.state.jobLogs[currentJobId] : undefined;
+    if (!entry) return null;
+    return {
+      ...entry,
+      status: Object.fromEntries(entry.agents.map((agent) => [agent.agent, agent.status])),
+    };
+  }, [currentJobId, demo.state.jobLogs]);
+
   // Aggregate token usage across all candidates, grouped by agent.
   const { tokenByAgentAcrossAll, totalTokensAcrossAllCandidates } = useMemo(() => {
     const byAgent = new Map<string, { promptTokens: number; completionTokens: number; totalTokens: number }>();
     let total = 0;
-    for (const entry of inferredLogs) {
+    for (const entry of [...inferredLogs, ...Object.values(demo.state.jobLogs)]) {
       for (const a of entry.agents) {
         if (!a.tokenUsage) continue;
         const existing = byAgent.get(a.agent);
@@ -273,7 +297,7 @@ export function UnderTheHood() {
       }
     }
     return { tokenByAgentAcrossAll: byAgent, totalTokensAcrossAllCandidates: total };
-  }, [inferredLogs]);
+  }, [demo.state.jobLogs, inferredLogs]);
 
   // Prefer the workflow for the page's current candidate, then any active
   // workflow, then the most recently updated workflow.
@@ -322,11 +346,12 @@ export function UnderTheHood() {
     });
   }, [selectedAgent, override, defaultPrompt]);
 
-  if (!demo.state.enabled || !demo.state.showUnderTheHood) return null;
+  if (!demo.state.enabled) return null;
 
   return (
     <>
-    <Card id="demo-under-the-hood-card" className="mt-8 border-primary/20 shadow-sm">
+    <div className="h-[200px]" aria-hidden="true" />
+    <Card id="demo-under-the-hood-card" className="border-primary/20 shadow-sm">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Cpu className="h-4 w-4 text-primary" />
@@ -408,7 +433,14 @@ export function UnderTheHood() {
                 <Activity className="h-4 w-4" />
                 Current workflow
               </div>
-              {currentWorkflowEntry ? (
+              {currentJobRun ? (
+                <WorkflowPath
+                  stages={['JD Agent']}
+                  agentStatus={currentJobRun.status}
+                  title={`Job ${currentJobRun.jobId.slice(0, 8)}`}
+                  onSelect={setSelectedAgent}
+                />
+              ) : currentWorkflowEntry ? (
                 <WorkflowPath
                   stages={stages}
                   agentStatus={currentWorkflowEntry.status}
@@ -578,7 +610,7 @@ export function UnderTheHood() {
       )}
     </Card>
 
-    <Card id="demo-workflow-paths-card" className="mt-4 border-primary/20 shadow-sm">
+    {demo.state.showAgentRunsPerCandidate && <Card id="demo-workflow-paths-card" className="mt-4 border-primary/20 shadow-sm">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Cpu className="h-4 w-4 text-primary" />
@@ -609,7 +641,7 @@ export function UnderTheHood() {
           )}
         </section>
       </CardContent>
-    </Card>
+    </Card>}
     </>
   );
 }

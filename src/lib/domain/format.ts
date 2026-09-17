@@ -47,20 +47,6 @@ export function candidateHistoryText(structured: ResumeExtraction | null): strin
     );
   }
 
-  if (structured.education.length) {
-    sections.push(
-      'EDUCATION\n' +
-        structured.education
-          .map(
-            (e) =>
-              `${e.degree}${e.field ? ` in ${e.field}` : ''}, ${e.institution}${
-                e.year ? ` (${e.year})` : ''
-              }`
-          )
-          .join('\n')
-    );
-  }
-
   if (structured.certifications.length) {
     sections.push(
       'CERTIFICATIONS\n' +
@@ -114,10 +100,9 @@ export function jobEmbeddingText(
 
 /** Text used to embed a candidate for retrieval. */
 export function candidateEmbeddingText(
-  name: string,
   structured: ResumeExtraction | null,
   raw: string | null
 ): string {
-  if (!structured) return `Candidate: ${name}\n\n${raw ?? ''}`;
-  return [`Candidate: ${name}`, resumeProfileText(structured)].join('\n');
+  if (!structured) return `Candidate profile\n\n${raw ?? ''}`;
+  return resumeProfileText(structured);
 }

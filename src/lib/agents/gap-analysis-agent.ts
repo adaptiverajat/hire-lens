@@ -143,6 +143,7 @@ export async function runGapAnalysisAgent(input: {
         ? `\n\nCALIBRATION NOTES (from past runs — adjust your behavior accordingly)\n${input.calibrationNotes.map((n, i) => `Note ${i + 1} (${n.note_type}, ${Math.round(n.confidence * 100)}%): ${n.content}`).join('\n')}`
         : '',
     },
+    pii: { names: [input.candidateName] },
   });
 
   return {

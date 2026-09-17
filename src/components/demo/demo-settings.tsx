@@ -43,19 +43,16 @@ export function DemoSettings() {
 
         <div className="flex items-start gap-3">
           <Checkbox
-            id="show-under-the-hood"
-            checked={demo.state.showUnderTheHood}
-            onCheckedChange={(checked) => {
-              demo.setShowUnderTheHood(checked === true);
-              startTransition(() => router.refresh());
-            }}
+            id="show-agent-runs-per-candidate"
+            checked={demo.state.showAgentRunsPerCandidate}
+            onCheckedChange={(checked) => demo.setShowAgentRunsPerCandidate(checked === true)}
           />
           <div>
-            <Label htmlFor="show-under-the-hood" className="font-medium">
-              Show Under the hood
+            <Label htmlFor="show-agent-runs-per-candidate" className="font-medium">
+              Show Agent runs per candidate
             </Label>
             <p className="text-xs text-muted-foreground">
-              Show or hide the agent workflow panel when Demo mode is enabled.
+              Show or hide the separate candidate workflow history. Under the hood follows Demo mode.
             </p>
           </div>
         </div>
@@ -79,12 +76,26 @@ export function DemoSettings() {
           </div>
         </div>
 
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="show-next-dev-tools"
+            checked={demo.state.showNextDevTools}
+            onCheckedChange={(checked) => demo.setShowNextDevTools(checked === true)}
+          />
+          <div>
+            <Label htmlFor="show-next-dev-tools" className="font-medium">
+              Show Next.js developer tools
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Show the bottom-left Next.js development menu. This has no effect in production.
+            </p>
+          </div>
+        </div>
+
         {demo.state.enabled ? (
           <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 p-4">
             <p className="text-sm text-muted-foreground">
-              AI credentials are read from <code>.env.local</code>. You do not need to enter them
-              again. Use the &ldquo;Under the hood&rdquo; panel at the bottom of AI pages to override
-              prompts per agent in real time.
+              Use the &ldquo;Under the hood&rdquo; panel at the bottom of AI enabled pages to override prompts per agent in real time.
             </p>
           </div>
         ) : null}

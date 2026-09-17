@@ -95,6 +95,7 @@ export async function runQuestionAgent(input: {
           .join('\n') || '- none identified',
       evidence: formatEvidence(input.evidence),
     },
+    pii: { names: [input.candidateName] },
   });
 
     return {

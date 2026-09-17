@@ -76,6 +76,7 @@ export async function runTranscriptAgent(input: {
   questions: PlannedQuestion[];
   transcript: string;
   participants: string[];
+  candidateInstitutions?: string[];
   evidence: EvidenceItem[];
   /** Reflexion feedback from a previous failed validation attempt. */
   feedback?: string;
@@ -116,6 +117,10 @@ export async function runTranscriptAgent(input: {
       calibrationNotes: input.calibrationNotes && input.calibrationNotes.length > 0
         ? `\n\nCALIBRATION NOTES (from past runs — adjust your behavior accordingly)\n${input.calibrationNotes.map((n, i) => `Note ${i + 1} (${n.note_type}, ${Math.round(n.confidence * 100)}%): ${n.content}`).join('\n')}`
         : '',
+    },
+    pii: {
+      names: [input.candidateName, ...input.participants],
+      institutions: input.candidateInstitutions,
     },
   });
 

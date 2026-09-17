@@ -75,6 +75,7 @@ export async function runRedFlagAgent(input: {
   candidateHeadline: string | null;
   resumeProfile: string;
   transcript: string;
+  candidateInstitutions?: string[];
   /** Reflexion feedback from a previous failed validation attempt. */
   feedback?: string;
   /** Calibration notes from shared agent memory. */
@@ -105,6 +106,10 @@ export async function runRedFlagAgent(input: {
       calibrationNotes: input.calibrationNotes && input.calibrationNotes.length > 0
         ? `\n\nCALIBRATION NOTES (from past runs — adjust your behavior accordingly)\n${input.calibrationNotes.map((n, i) => `Note ${i + 1} (${n.note_type}, ${Math.round(n.confidence * 100)}%): ${n.content}`).join('\n')}`
         : '',
+    },
+    pii: {
+      names: [input.candidateName],
+      institutions: input.candidateInstitutions,
     },
   });
 

@@ -245,7 +245,7 @@ const graph = new StateGraph(State)
 
     const gapQuery = [
       `Role: ${state.job!.title}`,
-      `Validating gaps for candidate: ${state.candidate!.full_name}`,
+      'Validating gaps for the current candidate',
       `Missing skills: ${missingSkills.join(', ') || 'none'}`,
       `Partial skills: ${partialSkills.join(', ') || 'none'}`,
       `Areas to validate: ${gap.areas_to_validate.map((a) => a.area).join('; ') || 'none'}`,

@@ -182,6 +182,10 @@ const ResumeState = Annotation.Root({
   runId: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
   jobId: Annotation<string>({ reducer: (_, b) => b, default: () => '' }),
   resume: Annotation<string>({ reducer: (_, b) => b, default: () => '' }),
+  candidateName: Annotation<string>({ reducer: (_, b) => b, default: () => '' }),
+  candidateEmail: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
+  candidatePhone: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
+  candidateLocation: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
   result: Annotation<ResumeAgentResult | null>({ reducer: (_, b) => b, default: () => null }),
   chunks: Annotation<number>({ reducer: (_, b) => b, default: () => 0 }),
 });
@@ -192,7 +196,7 @@ const resumeGraph = new StateGraph(ResumeState)
 
     const { data } = await db
       .from('candidates')
-      .select('id, job_id, resume_raw')
+      .select('id, job_id, full_name, email, phone, location, resume_raw')
       .eq('id', state.candidateId)
       .maybeSingle();
 
@@ -206,11 +210,24 @@ const resumeGraph = new StateGraph(ResumeState)
       .update({ parse_status: 'processing', parse_error: null })
       .eq('id', state.candidateId);
 
-    return { jobId: data.job_id as string, resume: data.resume_raw as string };
+    return {
+      jobId: data.job_id as string,
+      resume: data.resume_raw as string,
+      candidateName: data.full_name as string,
+      candidateEmail: data.email as string | null,
+      candidatePhone: data.phone as string | null,
+      candidateLocation: data.location as string | null,
+    };
   })
 
   .addNode('extract', async (state) => ({
-    result: await runResumeAgent({ resume: state.resume }),
+    result: await runResumeAgent({
+      resume: state.resume,
+      candidateName: state.candidateName,
+      candidateEmail: state.candidateEmail,
+      candidatePhone: state.candidatePhone,
+      candidateLocation: state.candidateLocation,
+    }),
   }))
 
   .addNode('persist', async (state) => {
@@ -257,8 +274,15 @@ const resumeGraph = new StateGraph(ResumeState)
       userId: state.userId,
       jobId: state.jobId,
       candidateId: state.candidateId,
-      content: candidateEmbeddingText(extraction.full_name, extraction, state.resume),
-      metadata: { title: extraction.full_name, kind: 'resume' },
+      content: candidateEmbeddingText(extraction, state.resume),
+      metadata: { title: 'Candidate profile', kind: 'resume' },
+      pii: {
+        names: [extraction.full_name],
+        emails: [extraction.email],
+        phones: [extraction.phone],
+        locations: [extraction.location],
+        institutions: extraction.education.map((item) => item.institution),
+      },
     });
 
     return { chunks };

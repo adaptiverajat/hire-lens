@@ -5,6 +5,11 @@ import {
   type ResumeExtraction,
 } from '@/lib/agents/schemas';
 import { normaliseSkill } from '@/lib/domain/skills';
+import {
+  extractEmailFromText,
+  extractFullNameFromText,
+  extractPhoneFromText,
+} from '@/lib/utils/extract-contact';
 
 const SYSTEM = `You are the Resume Agent in a recruitment intelligence platform.
 You read a raw resume and extract a structured candidate profile.
@@ -41,8 +46,17 @@ export interface ResumeAgentResult {
 }
 
 /** Feature 2: parse a resume into a structured, skill-normalised profile. */
-export async function runResumeAgent(input: { resume: string }): Promise<ResumeAgentResult> {
-  const extraction = await generateStructured({
+export async function runResumeAgent(input: {
+  resume: string;
+  candidateName?: string | null;
+  candidateEmail?: string | null;
+  candidatePhone?: string | null;
+  candidateLocation?: string | null;
+}): Promise<ResumeAgentResult> {
+  const fullName = input.candidateName || extractFullNameFromText(input.resume);
+  const email = input.candidateEmail || extractEmailFromText(input.resume);
+  const phone = input.candidatePhone || extractPhoneFromText(input.resume);
+  const modelExtraction = await generateStructured({
     schema: resumeExtractionSchema,
     schemaName: 'resume_extraction',
     runName: 'Resume Agent',
@@ -51,7 +65,21 @@ export async function runResumeAgent(input: { resume: string }): Promise<ResumeA
     tier: 'fast',
     maxTokens: 4000,
     input: { resume: input.resume.slice(0, 12000) },
+    pii: {
+      names: [fullName],
+      emails: [email],
+      phones: [phone],
+      locations: [input.candidateLocation],
+    },
   });
+  const extraction: ResumeExtraction = {
+    ...modelExtraction,
+    full_name: fullName ?? 'Candidate',
+    email,
+    phone,
+    location: input.candidateLocation ?? null,
+    education: [],
+  };
 
   // Technologies named inside experience/projects are real signal, so fold them
   // into the skill list rather than losing them.

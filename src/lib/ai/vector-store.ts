@@ -1,6 +1,7 @@
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { embeddingModel, embeddingModelName } from '@/lib/ai/models';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import { redactPii, type PiiContext } from '@/lib/ai/pii';
 
 export type EmbeddingOwnerType =
   | 'job'
@@ -45,8 +46,9 @@ export async function indexDocument(params: {
   jobId?: string | null;
   candidateId?: string | null;
   metadata?: Record<string, unknown>;
+  pii?: PiiContext;
 }): Promise<number> {
-  const chunks = await chunkText(params.content);
+  const chunks = await chunkText(redactPii(params.content, params.pii));
   const supabase = createSupabaseAdminClient();
 
   // Replace rather than append so re-indexing never leaves stale chunks behind.
@@ -94,8 +96,9 @@ export async function retrieveSimilar(params: {
   excludeCandidateId?: string | null;
   limit?: number;
   minSimilarity?: number;
+  pii?: PiiContext;
 }): Promise<RetrievedChunk[]> {
-  const query = params.query.trim();
+  const query = redactPii(params.query, params.pii).trim();
   if (!query) return [];
 
   const [embedding] = await embeddingModel().embedDocuments([query.slice(0, 8000)]);

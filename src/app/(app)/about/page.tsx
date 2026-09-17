@@ -19,8 +19,9 @@ export default function AboutPage() {
       </div>
 
       <p className="text-lg text-muted-foreground">
-        Recruitment intelligence that uses an adaptive multi-agent system to support
-        evidence-based hiring with reflexion, shared memory, and cross-candidate reasoning.
+        Privacy-aware recruitment intelligence powered by adaptive, observable agentic AI.
+        HireLens combines deterministic scoring, evidence-grounded models, reflexion, shared
+        memory, and human review without sending candidate PII to model providers.
       </p>
 
       <Card id="about-what-it-does-card">
@@ -29,9 +30,9 @@ export default function AboutPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            HireLens turns job descriptions and resumes into structured, comparable profiles, then
-            runs a reproducible, multi-agent workflow with supervisor routing, reflexion loops,
-            and shared agent memory to help recruiters make better decisions.
+            HireLens turns job descriptions, privacy-filtered resumes, and interview transcripts
+            into structured evidence. LangGraph then coordinates specialised AI agents, deterministic
+            scoring, semantic retrieval, validation, and human review across the hiring lifecycle.
           </p>
           <ul className="list-disc space-y-1 pl-5">
             <li>
@@ -39,8 +40,9 @@ export default function AboutPage() {
               requirements, importance scores, categories, and minimum years of experience.
             </li>
             <li>
-              <strong>Candidate intake</strong> — extracts a normalised skill profile, employment
-              history, projects, and contact details from resumes.
+              <strong>Privacy-aware candidate intake</strong> — extracts contact details locally,
+              removes candidate identity, contact, location, URLs, and education institutions before
+              AI processing, then builds a normalised skills, employment, and project profile.
             </li>
             <li>
               <strong>Supervisor routing</strong> — inspects candidate coverage and seniority before
@@ -127,15 +129,61 @@ export default function AboutPage() {
               trail but no longer gates access.
             </li>
             <li>
-              <strong>Token usage tracking</strong> — captures per-agent OpenAI token usage
-              (prompt, completion, total) for every LLM call and displays it in the Under the Hood
-              section, aggregated per candidate and per agent.
+              <strong>Optional token usage tracking</strong> — captures per-agent prompt,
+              completion, and total token counts. The display is off by default and can be enabled
+              from Settings for candidate and agent-level cost visibility.
             </li>
           </ul>
           <p>
-            Every AI output is advisory. A human always makes the final call, and every override
-            becomes calibration data that makes the agents smarter over time.
+            Every AI output is advisory. A human always makes the final call, while validated
+            feedback and overrides become calibration data for future runs. Candidate PII remains
+            available to authorised application users but is excluded at outbound AI boundaries.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card id="about-privacy-card" className="border-emerald-500/20">
+        <CardHeader>
+          <CardTitle>Candidate privacy and AI boundaries</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            Candidate PII is kept inside the application and removed before content reaches an
+            external chat or embedding model. The control is enforced centrally rather than relying
+            only on individual agent prompts.
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              <strong>Central outbound sanitisation</strong> — system prompts, user templates, and
+              nested model inputs pass through the same privacy filter before every structured LLM
+              invocation.
+            </li>
+            <li>
+              <strong>Identity and contact redaction</strong> — known candidate names, email
+              addresses, phone numbers, locations, participant names, addresses, and URLs are
+              replaced with non-identifying placeholders.
+            </li>
+            <li>
+              <strong>Education privacy</strong> — college, university, institute, school, and
+              academy references are redacted, and education sections are removed from resume text
+              sent to AI models.
+            </li>
+            <li>
+              <strong>Local contact preservation</strong> — name, email, and phone extraction occurs
+              locally so authorised recruiters can still use those fields without asking the Resume
+              Agent to process them.
+            </li>
+            <li>
+              <strong>Privacy-filtered vector search</strong> — document chunks and semantic-search
+              queries are sanitised before embedding. Candidate embedding text is anonymous and does
+              not include education history.
+            </li>
+            <li>
+              <strong>Transcript protection</strong> — candidate and participant identities plus
+              known education institutions are removed before transcript evaluation and red-flag
+              analysis.
+            </li>
+          </ul>
         </CardContent>
       </Card>
 
@@ -171,8 +219,9 @@ export default function AboutPage() {
               <ul className="list-disc space-y-1 pl-5 text-sm">
                 <li>LangChain and @langchain/openai</li>
                 <li>LangGraph state-machine workflows</li>
-                <li>OpenAI structured outputs / Responses API</li>
-                <li>LangSmith tracing</li>
+                <li>OpenAI structured outputs and privacy-filtered embeddings</li>
+                <li>Central PII sanitisation before model-provider boundaries</li>
+                <li>LangSmith tracing of already-sanitised model calls</li>
                 <li>Durable task lifecycle (idempotency, artifacts, events)</li>
                 <li>Reflexion retry loops with validation feedback</li>
                 <li>Shared agent memory (calibration store)</li>
@@ -197,10 +246,11 @@ export default function AboutPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            The platform is built around a set of specialised agents that run inside LangGraph
-            workflows. Each agent is responsible for one narrow task and uses OpenAI structured
-            outputs validated by Zod schemas. Agents read calibration notes from shared memory
-            before running, and validation failures or reviewer overrides write new notes back.
+            The platform is built around specialised agents coordinated by LangGraph. LLM agents
+            produce Zod-validated structured outputs, retrieval agents use privacy-filtered
+            embeddings, supervisor nodes choose execution depth, and reflexion loops retry invalid
+            evidence. Shared memory carries calibration between runs, while deterministic checks and
+            human review remain outside the model boundary.
           </p>
 
           <Separator />
@@ -219,9 +269,10 @@ export default function AboutPage() {
             <div>
               <h3 className="font-medium text-foreground">Resume Agent</h3>
               <p className="text-sm">
-                Reads a raw resume and extracts a structured candidate profile. Captures skills with
-                evidence and proficiency, employment and project history, inferred technologies, and
-                total years of experience from the timeline.
+                Receives a privacy-filtered resume after contact fields are extracted locally.
+                Captures skills with evidence and proficiency, employment and project history,
+                inferred technologies, and total experience without receiving the candidate&apos;s
+                identity, contact details, location, or education institutions.
               </p>
             </div>
 
@@ -304,8 +355,8 @@ export default function AboutPage() {
               <strong>JD intake</strong> — load → extract structured JD → persist → index vectors.
             </li>
             <li>
-              <strong>Resume intake</strong> — load → extract structured resume → persist → index
-              vectors.
+              <strong>Resume intake</strong> — load → extract contact fields locally → redact PII →
+              extract a structured profile → persist → index privacy-filtered vectors.
             </li>
             <li>
               <strong>Candidate analysis</strong> — load → route analysis (supervisor) → load peer
@@ -326,8 +377,9 @@ export default function AboutPage() {
             reviewer overrides and validation failures, which agents read before each run.
           </p>
           <p className="text-sm">
-            Vector indexes for job descriptions, resumes, questions, and evaluations feed the
-            Evidence Retrieval Agent, giving the system an explicit memory of past decisions.
+            Privacy-filtered vector indexes for job descriptions, anonymous candidate profiles,
+            questions, and evaluations feed the Evidence Retrieval Agent, giving the system an
+            explicit evidence memory without sending candidate PII to the embedding provider.
           </p>
         </CardContent>
       </Card>
@@ -372,29 +424,42 @@ export default function AboutPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            The <strong>Under the Hood</strong> panel (visible on every page when demo mode is
-            enabled) provides real-time visibility into the agentic AI pipeline.
+            Demo mode makes the agentic system explainable without changing production decisions.
+            When Demo mode is enabled, the <strong>Under the Hood</strong> panel appears after a clear
+            visual break from application content and exposes the workflow&apos;s live mechanics.
           </p>
           <ul className="list-disc space-y-1 pl-5">
             <li>
-              <strong>Agent Runs per candidate</strong> — one stacked workflow per candidate, showing each
-              agent in lifecycle order with live status (running, complete, failed). Completed
-              agents turn green with check marks; running agents show spinners.
+              <strong>Granular running-agent summary</strong> — identifies the current stage and
+              separately explains the model&apos;s role and the surrounding agentic orchestration,
+              including routing, RAG, validation, persistence, and human handoff.
             </li>
             <li>
-              <strong>Agent runs by candidate</strong> — a per-candidate breakdown of every agent
-              that has run, with timestamps and status indicators.
+              <strong>Activity-scoped status checks</strong> — agent-status requests begin when a
+              user action starts an AI workflow, continue only while a server-side run is active,
+              and stop when the run finishes or no active run is returned.
             </li>
             <li>
-              <strong>Token usage</strong> — each agent row shows its OpenAI token consumption
-              (prompt, completion, total). Each candidate header shows the aggregate token total
-              across all agents. Token data is captured via LangChain callbacks and flows through
-              the API response to the UI without changing any agent or graph function signatures.
+              <strong>Current workflow</strong> — shows each specialised agent in lifecycle order
+              with running, complete, and failed states.
             </li>
             <li>
-              <strong>Prompt editor</strong> — view and override the system and user prompts for
-              each agent at runtime, so you can experiment with prompt engineering without
-              redeploying.
+              <strong>Agent runs per candidate</strong> — an independent Settings toggle controls
+              the separate stacked candidate workflow history without hiding Under the Hood itself.
+            </li>
+            <li>
+              <strong>Optional token visibility</strong> — token totals are captured per agent but
+              hidden by default; recruiters can opt in from Settings to see candidate and agent-level
+              prompt, completion, and total usage.
+            </li>
+            <li>
+              <strong>Prompt editor</strong> — displays and overrides agent system and user templates
+              at runtime for controlled prompt-engineering demonstrations. Outbound values still pass
+              through the central PII filter.
+            </li>
+            <li>
+              <strong>Developer display control</strong> — the Next.js bottom-left development menu
+              is hidden by default and can be shown with a development-only Settings flag.
             </li>
           </ul>
         </CardContent>

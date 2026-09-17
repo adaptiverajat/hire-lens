@@ -3,6 +3,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { chatModel } from '@/lib/ai/models';
 import { getDemoContext } from '@/lib/demo/server-store';
 import { recordTokenUsage, type TokenUsage } from '@/lib/ai/token-usage';
+import { redactPii, sanitizeLlmInput, type PiiContext } from '@/lib/ai/pii';
 
 /**
  * Runs a prompt and validates the model's reply against a Zod schema using
@@ -19,6 +20,7 @@ export async function generateStructured<T extends z.ZodType>({
   temperature = 0.2,
   maxTokens,
   runName,
+  pii,
 }: {
   schema: T;
   schemaName: string;
@@ -29,6 +31,7 @@ export async function generateStructured<T extends z.ZodType>({
   temperature?: number;
   maxTokens?: number;
   runName?: string;
+  pii?: PiiContext;
 }): Promise<z.infer<T>> {
   const demo = getDemoContext();
   const activeRun = runName ?? schemaName;
@@ -36,10 +39,11 @@ export async function generateStructured<T extends z.ZodType>({
     demo?.enabled && demo.prompts[activeRun]?.system ? demo.prompts[activeRun].system : system;
   const resolvedUser =
     demo?.enabled && demo.prompts[activeRun]?.user ? demo.prompts[activeRun].user : user;
+  const safeInput = sanitizeLlmInput(input, pii);
 
   const prompt = ChatPromptTemplate.fromMessages([
-    ['system', resolvedSystem],
-    ['human', resolvedUser],
+    ['system', redactPii(resolvedSystem, pii)],
+    ['human', redactPii(resolvedUser, pii)],
   ]);
 
   // Use includeRaw: true so we get the raw AIMessage alongside the parsed
@@ -52,7 +56,7 @@ export async function generateStructured<T extends z.ZodType>({
 
   const chain = prompt.pipe(model);
 
-  const response = (await chain.invoke(input, {
+  const response = (await chain.invoke(safeInput, {
     runName: activeRun,
   })) as unknown as { raw: { usage_metadata?: { input_tokens: number; output_tokens: number; total_tokens: number } }; parsed: z.infer<T> };
 

@@ -9,7 +9,8 @@ import { ButtonLink } from '@/components/shared/button-link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
-import { totalTokensFromUsage } from '@/lib/ai/token-usage';
+import { totalTokensFromUsage, type TokenUsage } from '@/lib/ai/token-usage';
+import { serverEnv } from '@/lib/env';
 
 export const metadata = { title: 'Dashboard - HireLens' };
 
@@ -20,9 +21,38 @@ const WORKFLOW_LABELS: Record<string, string> = {
   transcript_review: 'Transcript reviewed',
 };
 
+const OPENAI_PRICING_USD_PER_MILLION: Record<string, { input: number; output: number }> = {
+  'gpt-4.1': { input: 2, output: 8 },
+  'gpt-4.1-mini': { input: 0.4, output: 1.6 },
+};
+
+const FAST_AGENTS = new Set(['JD Agent', 'Resume Agent', 'Red Flag Agent']);
+
+function pricingForModel(model: string) {
+  return Object.entries(OPENAI_PRICING_USD_PER_MILLION)
+    .sort(([a], [b]) => b.length - a.length)
+    .find(([name]) => model === name || model.startsWith(`${name}-`))?.[1];
+}
+
+function estimatedOpenAiCost(agent: string, usage: TokenUsage, chatModel: string, fastModel: string) {
+  const pricing = pricingForModel(FAST_AGENTS.has(agent) ? fastModel : chatModel);
+  if (!pricing) return null;
+  return (usage.promptTokens * pricing.input + usage.completionTokens * pricing.output) / 1_000_000;
+}
+
+function formatUsd(value: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: value < 0.01 ? 4 : 2,
+    maximumFractionDigits: value < 0.01 ? 4 : 2,
+  }).format(value);
+}
+
 export default async function DashboardPage() {
   const demo = await getDemoEnabled();
   const showTokens = await getShowTokens();
+  const { OPENAI_CHAT_MODEL, OPENAI_FAST_MODEL } = serverEnv();
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -71,7 +101,7 @@ export default async function DashboardPage() {
   const openJobs = (jobs ?? []).filter((j) => j.status === 'open').length;
   const urgentOpenJobs = (jobs ?? []).filter((j) => j.status === 'open' && j.priority === 'urgent').length;
   // --- Token usage metrics ---
-  type RunRow = { output?: { token_usage?: Record<string, { promptTokens: number; completionTokens: number; totalTokens: number }> } | null; started_at: string; candidate_id?: string | null };
+  type RunRow = { output?: { token_usage?: Record<string, TokenUsage> } | null; started_at: string; candidate_id?: string | null };
   const allRunRows = (allRuns ?? []) as unknown as RunRow[];
 
   const totalTokenUsage = allRunRows.reduce(
@@ -87,20 +117,31 @@ export default async function DashboardPage() {
     .reduce((sum, r) => sum + totalTokensFromUsage(r.output?.token_usage), 0);
 
   // Avg token usage per candidate (unique candidate_ids with token data).
-  const candidatesWithTokens = new Map<string, number>();
+  const candidatesWithTokens = new Map<string, { tokens: number; cost: number | null }>();
   for (const r of allRunRows) {
-    const tokens = totalTokensFromUsage(r.output?.token_usage);
-    if (tokens > 0 && r.candidate_id) {
-      candidatesWithTokens.set(
-        r.candidate_id,
-        (candidatesWithTokens.get(r.candidate_id) ?? 0) + tokens,
-      );
-    }
+    if (!r.candidate_id || !r.output?.token_usage) continue;
+    const entries = Object.entries(r.output.token_usage);
+    const tokens = totalTokensFromUsage(r.output.token_usage);
+    if (tokens === 0) continue;
+    const runCosts = entries.map(([agent, usage]) =>
+      estimatedOpenAiCost(agent, usage, OPENAI_CHAT_MODEL, OPENAI_FAST_MODEL),
+    );
+    const runCost = runCosts.some((cost) => cost === null)
+      ? null
+      : runCosts.reduce<number>((sum, cost) => sum + (cost ?? 0), 0);
+    const existing = candidatesWithTokens.get(r.candidate_id) ?? { tokens: 0, cost: 0 };
+    candidatesWithTokens.set(r.candidate_id, {
+      tokens: existing.tokens + tokens,
+      cost: existing.cost === null || runCost === null ? null : existing.cost + runCost,
+    });
   }
-  const avgTokenPerCandidate =
-    candidatesWithTokens.size > 0
-      ? Math.round(totalTokenUsage / candidatesWithTokens.size)
-      : 0;
+  const candidateUsage = Array.from(candidatesWithTokens.values());
+  const avgTokenPerCandidate = candidatesWithTokens.size > 0
+    ? Math.round(candidateUsage.reduce((sum, usage) => sum + usage.tokens, 0) / candidatesWithTokens.size)
+    : 0;
+  const avgCostPerCandidate = candidatesWithTokens.size > 0 && candidateUsage.every((usage) => usage.cost !== null)
+    ? candidateUsage.reduce((sum, usage) => sum + (usage.cost ?? 0), 0) / candidatesWithTokens.size
+    : null;
 
   const countStatus = (status: string) => candidateRows.filter((c) => c.status === status).length;
 
@@ -154,8 +195,17 @@ export default async function DashboardPage() {
                 <StatCard
                   id="stat-avg-token-per-candidate"
                   label="Avg. tokens / candidate"
-                  value={avgTokenPerCandidate.toLocaleString()}
-                  hint={candidatesWithTokens.size > 0 ? `${candidatesWithTokens.size} candidates` : 'no data'}
+                  value={
+                    <span>
+                      {avgTokenPerCandidate.toLocaleString()}
+                      <span className="block text-sm font-medium text-emerald-600">
+                        {avgCostPerCandidate !== null ? `≈ ${formatUsd(avgCostPerCandidate)}` : 'cost unavailable'}
+                      </span>
+                    </span>
+                  }
+                  hint={candidatesWithTokens.size > 0
+                    ? `${candidatesWithTokens.size} candidates · standard OpenAI rates; embeddings excluded`
+                    : 'no data'}
                   icon={<Gauge className="size-5" aria-hidden />}
                 />
               </>

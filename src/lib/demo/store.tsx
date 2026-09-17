@@ -34,22 +34,33 @@ export interface CandidateLogEntry {
   updatedAt: number;
 }
 
+export interface JobAgentLogEntry {
+  jobId: string;
+  agents: CandidateAgentLog[];
+  updatedAt: number;
+}
+
 export interface DemoState {
+  settingsVersion: number;
   enabled: boolean;
-  showUnderTheHood: boolean;
+  showAgentRunsPerCandidate: boolean;
   showTokens: boolean;
+  showNextDevTools: boolean;
   credentials: DemoCredentials;
   prompts: Record<string, PromptOverride>;
   completedAgents: string[];
   candidateLogs: Record<string, CandidateLogEntry>;
+  jobLogs: Record<string, JobAgentLogEntry>;
 }
 
 const STORAGE_KEY = 'hirelens_demo';
 
 const DEFAULT_STATE: DemoState = {
+  settingsVersion: 2,
   enabled: false,
-  showUnderTheHood: true,
-  showTokens: true,
+  showAgentRunsPerCandidate: true,
+  showTokens: false,
+  showNextDevTools: false,
   credentials: {
     openaiKey: '',
     supabaseUrl: '',
@@ -59,6 +70,7 @@ const DEFAULT_STATE: DemoState = {
   prompts: {},
   completedAgents: [],
   candidateLogs: {},
+  jobLogs: {},
 };
 
 function loadState(): DemoState {
@@ -67,7 +79,10 @@ function loadState(): DemoState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_STATE;
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_STATE, ...parsed, credentials: { ...DEFAULT_STATE.credentials, ...parsed?.credentials }, prompts: parsed?.prompts ?? {}, completedAgents: parsed?.completedAgents ?? [], candidateLogs: parsed?.candidateLogs ?? {} };
+    const migrated = parsed?.settingsVersion === DEFAULT_STATE.settingsVersion
+      ? parsed
+      : { ...parsed, settingsVersion: DEFAULT_STATE.settingsVersion, showTokens: false };
+    return { ...DEFAULT_STATE, ...migrated, credentials: { ...DEFAULT_STATE.credentials, ...migrated?.credentials }, prompts: migrated?.prompts ?? {}, completedAgents: migrated?.completedAgents ?? [], candidateLogs: migrated?.candidateLogs ?? {}, jobLogs: migrated?.jobLogs ?? {} };
   } catch {
     return DEFAULT_STATE;
   }
@@ -77,8 +92,9 @@ interface DemoContextValue {
   state: DemoState;
   loaded: boolean;
   setEnabled: (enabled: boolean) => void;
-  setShowUnderTheHood: (show: boolean) => void;
+  setShowAgentRunsPerCandidate: (show: boolean) => void;
   setShowTokens: (show: boolean) => void;
+  setShowNextDevTools: (show: boolean) => void;
   setCredentials: (credentials: Partial<DemoCredentials>) => void;
   getPrompt: (agent: string) => PromptOverride | undefined;
   setPrompt: (agent: string, prompt: PromptOverride) => void;
@@ -86,6 +102,7 @@ interface DemoContextValue {
   markAgentComplete: (agent: string) => void;
   resetCompletedAgents: () => void;
   logCandidateAgent: (candidateId: string, name: string, agent: string, status: 'running' | 'complete' | 'failed', tokenUsage?: TokenUsage) => void;
+  logJobAgent: (jobId: string, agent: string, status: 'running' | 'complete' | 'failed', tokenUsage?: TokenUsage) => void;
   setCandidateName: (candidateId: string, name: string) => void;
   removeCandidateLog: (candidateId: string) => void;
   clearCandidateLogs: () => void;
@@ -105,6 +122,7 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
   useEffect(() => {
     if (!loaded) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    document.documentElement.dataset.showNextDevTools = String(state.showNextDevTools);
   }, [state, loaded]);
 
   const setEnabled = useCallback((enabled: boolean) => {
@@ -112,14 +130,18 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
     document.cookie = `hirelens_demo=${enabled}; path=/; max-age=31536000`;
   }, []);
 
-  const setShowUnderTheHood = useCallback((showUnderTheHood: boolean) => {
-    setState((prev) => ({ ...prev, showUnderTheHood }));
-    document.cookie = `hirelens_show_under_the_hood=${showUnderTheHood}; path=/; max-age=31536000; samesite=lax`;
+  const setShowAgentRunsPerCandidate = useCallback((showAgentRunsPerCandidate: boolean) => {
+    setState((prev) => ({ ...prev, showAgentRunsPerCandidate }));
   }, []);
 
   const setShowTokens = useCallback((showTokens: boolean) => {
     setState((prev) => ({ ...prev, showTokens }));
     document.cookie = `hirelens_show_tokens=${showTokens}; path=/; max-age=31536000; samesite=lax`;
+  }, []);
+
+  const setShowNextDevTools = useCallback((showNextDevTools: boolean) => {
+    setState((prev) => ({ ...prev, showNextDevTools }));
+    document.documentElement.dataset.showNextDevTools = String(showNextDevTools);
   }, []);
 
   const setCredentials = useCallback((credentials: Partial<DemoCredentials>) => {
@@ -242,6 +264,31 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
     []
   );
 
+  const logJobAgent = useCallback(
+    (jobId: string, agent: string, status: 'running' | 'complete' | 'failed', tokenUsage?: TokenUsage) => {
+      setState((prev) => {
+        const existing = prev.jobLogs[jobId] ?? { jobId, agents: [], updatedAt: Date.now() };
+        const prior = existing.agents.find((entry) => entry.agent === agent);
+        const accumulatedUsage = prior?.tokenUsage && tokenUsage
+          ? {
+              promptTokens: prior.tokenUsage.promptTokens + tokenUsage.promptTokens,
+              completionTokens: prior.tokenUsage.completionTokens + tokenUsage.completionTokens,
+              totalTokens: prior.tokenUsage.totalTokens + tokenUsage.totalTokens,
+            }
+          : tokenUsage ?? prior?.tokenUsage;
+        const agents = [
+          ...existing.agents.filter((entry) => entry.agent !== agent),
+          { agent, status, timestamp: Date.now(), tokenUsage: accumulatedUsage },
+        ];
+        return {
+          ...prev,
+          jobLogs: { ...prev.jobLogs, [jobId]: { jobId, agents, updatedAt: Date.now() } },
+        };
+      });
+    },
+    [],
+  );
+
   const setCandidateName = useCallback((candidateId: string, name: string) => {
     setState((prev) => {
       const existing = prev.candidateLogs[candidateId];
@@ -272,7 +319,7 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
 
   return (
     <DemoContext.Provider
-      value={{ state, loaded, setEnabled, setShowUnderTheHood, setShowTokens, setCredentials, getPrompt, setPrompt, resetPrompt, markAgentComplete, resetCompletedAgents, logCandidateAgent, setCandidateName, removeCandidateLog, clearCandidateLogs }}
+      value={{ state, loaded, setEnabled, setShowAgentRunsPerCandidate, setShowTokens, setShowNextDevTools, setCredentials, getPrompt, setPrompt, resetPrompt, markAgentComplete, resetCompletedAgents, logCandidateAgent, logJobAgent, setCandidateName, removeCandidateLog, clearCandidateLogs }}
     >
       {children}
     </DemoContext.Provider>

@@ -27,12 +27,12 @@ export function getDemoContext(): DemoServerContext | undefined {
 
 export async function getDemoEnabled(): Promise<boolean> {
   const cookieStore = await cookies();
-  return cookieStore.get('hirelens_demo')?.value !== 'false';
+  return cookieStore.get('hirelens_demo')?.value === 'true';
 }
 
 export async function getShowTokens(): Promise<boolean> {
   const cookieStore = await cookies();
-  return cookieStore.get('hirelens_show_tokens')?.value !== 'false';
+  return cookieStore.get('hirelens_show_tokens')?.value === 'true';
 }
 
 export function parseDemoHeaders(headers: Headers): DemoServerContext {
