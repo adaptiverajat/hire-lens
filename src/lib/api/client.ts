@@ -15,14 +15,10 @@ export class ApiClientError extends Error {
   }
 }
 
-const AGENT_BY_PATH: Record<string, string> = {
-  '/documents/extract': 'Resume Agent',
-};
-
 // The /analyze call runs agents server-side in sequence.
 const ANALYZE_SUB_AGENTS = ['Evidence Retrieval Agent', 'Gap Analysis + Question Agent'];
 
-// The /transcripts/:id/evaluate call runs agents server-side in sequence.
+// The /transcripts/:id/evaluate call retrieves evidence first, then runs evaluation checks in parallel.
 const TRANSCRIPT_SUB_AGENTS = [
   'Evidence Retrieval Agent',
   'Transcript Evaluation Agent',
@@ -39,7 +35,7 @@ function inferAgent(path: string): string | undefined {
   if (path.includes('/flags')) return 'Red Flag Agent';
   if (path.includes('/review')) return 'Human Review Agent';
   if (path.includes('/knowledge')) return 'Evidence Retrieval Agent';
-  return AGENT_BY_PATH[path];
+  return undefined;
 }
 
 /** Extracts a candidate ID from API paths like /candidates/abc-123/analyze. */
@@ -92,6 +88,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const method = init?.method ?? 'GET';
   const agent = inferAgent(path);
   const candidateId = extractCandidateId(path);
+  const contextualCandidateId = candidateId ?? (typeof window === 'undefined' ? undefined : extractCandidateId(window.location.pathname));
   const jobId = extractJobId(path);
   const isAnalyze = path.includes('/candidates/') && path.endsWith('/analyze');
   const isTranscriptEval = path.includes('/transcripts/') && path.endsWith('/evaluate');
@@ -102,14 +99,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ? TRANSCRIPT_SUB_AGENTS
       : null;
 
-  // Emit start traces for all sub-agents when the call runs multiple agents.
-  if (isMultiAgent && subAgents) {
-    for (const subAgent of subAgents) {
-      emitTrace('start', { path, method, agent: subAgent, candidateId, jobId });
-    }
-  } else {
-    emitTrace('start', { path, method, agent, candidateId, jobId });
-  }
+  // Expose one active workflow stage, then record all participating agents when the server returns.
+  emitTrace('start', { path, method, agent, candidateId: contextualCandidateId, jobId });
 
   const response = await fetch(`/api${path}`, {
     ...init,
@@ -126,10 +117,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // Session is gone; middleware will redirect on the next navigation.
     if (isMultiAgent && subAgents) {
       for (const subAgent of subAgents) {
-        emitTrace('finish', { path, method, agent: subAgent, status: 401, error: 'Session expired', candidateId, jobId });
+        emitTrace('finish', { path, method, agent: subAgent, status: 401, error: 'Session expired', candidateId: contextualCandidateId, jobId });
       }
     } else {
-      emitTrace('finish', { path, method, agent, status: 401, error: 'Session expired', candidateId, jobId });
+      emitTrace('finish', { path, method, agent, status: 401, error: 'Session expired', candidateId: contextualCandidateId, jobId });
     }
     window.location.href = '/login';
     throw new ApiClientError(401, 'Session expired');
@@ -143,10 +134,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       payload?.error ?? `Request failed with status ${response.status}`;
     if (isMultiAgent && subAgents) {
       for (const subAgent of subAgents) {
-        emitTrace('finish', { path, method, agent: subAgent, status: response.status, error, candidateId, jobId });
+        emitTrace('finish', { path, method, agent: subAgent, status: response.status, error, candidateId: contextualCandidateId, jobId });
       }
     } else {
-      emitTrace('finish', { path, method, agent, status: response.status, error, candidateId, jobId });
+      emitTrace('finish', { path, method, agent, status: response.status, error, candidateId: contextualCandidateId, jobId });
     }
     throw new ApiClientError(
       response.status,
@@ -162,7 +153,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   // For transcript evaluation, the candidate ID isn't in the URL — extract it
   // from the response payload so traces are attributed to the right candidate.
-  const effectiveCandidateId = candidateId ?? payload?.candidate_id;
+  const effectiveCandidateId = candidateId ?? payload?.candidate_id ?? contextualCandidateId;
 
   if (isMultiAgent && subAgents) {
     for (const subAgent of subAgents) {

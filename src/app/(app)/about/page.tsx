@@ -30,9 +30,10 @@ export default function AboutPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            HireLens turns job descriptions, privacy-filtered resumes, and interview transcripts
-            into structured evidence. LangGraph then coordinates specialised AI agents, deterministic
-            scoring, semantic retrieval, validation, and human review across the hiring lifecycle.
+            HireLens turns job descriptions, resumes, and interview transcripts into structured
+            evidence. Original source content remains available to authorised recruiters, while
+            privacy-filtered copies cross AI and embedding boundaries. LangGraph coordinates
+            specialised agents, deterministic scoring, retrieval, validation, and human review.
           </p>
           <ul className="list-disc space-y-1 pl-5">
             <li>
@@ -94,9 +95,9 @@ export default function AboutPage() {
               decision packet for a human reviewer.
             </li>
             <li>
-              <strong>Durable task orchestration</strong> — every agent run is tracked as typed
-              tasks with idempotency keys, dependency graphs, and persisted artifacts with evidence
-              claims, warnings, and confidence scores.
+              <strong>Observable orchestration</strong> — every LangGraph workflow has a persisted
+              run record, while transcript evaluation and red-flag work use durable typed tasks,
+              idempotency keys, events, and validated artifacts.
             </li>
             <li>
               <strong>Learning knowledge base</strong> — stores past evaluations and interview
@@ -174,6 +175,12 @@ export default function AboutPage() {
               Agent to process them.
             </li>
             <li>
+              <strong>Demo-safe document previews</strong> — when Demo mode is enabled, uploaded
+              resumes and transcripts are redacted before appearing in editable text areas. The
+              original extracted values are retained separately and saved for authorised future
+              retrieval; outbound AI processing still applies the central privacy boundary.
+            </li>
+            <li>
               <strong>Privacy-filtered vector search</strong> — document chunks and semantic-search
               queries are sanitised before embedding. Candidate embedding text is anonymous and does
               not include education history.
@@ -196,7 +203,7 @@ export default function AboutPage() {
             <div>
               <h3 className="mb-1 font-medium text-foreground">Frontend</h3>
               <ul className="list-disc space-y-1 pl-5 text-sm">
-                <li>Next.js 15 (App Router)</li>
+                <li>Next.js 16 (App Router)</li>
                 <li>React 19</li>
                 <li>TypeScript 5</li>
                 <li>Tailwind CSS 4</li>
@@ -222,7 +229,7 @@ export default function AboutPage() {
                 <li>OpenAI structured outputs and privacy-filtered embeddings</li>
                 <li>Central PII sanitisation before model-provider boundaries</li>
                 <li>LangSmith tracing of already-sanitised model calls</li>
-                <li>Durable task lifecycle (idempotency, artifacts, events)</li>
+                <li>Workflow run logging plus durable transcript tasks and artifacts</li>
                 <li>Reflexion retry loops with validation feedback</li>
                 <li>Shared agent memory (calibration store)</li>
               </ul>
@@ -280,10 +287,11 @@ export default function AboutPage() {
               <h3 className="font-medium text-foreground">Evidence Retrieval Agent</h3>
               <p className="text-sm">
                 Performs vector search over pgvector to retrieve comparable historical cases
-                (knowledge entries and evaluations). Runs in two passes during candidate analysis:
-                once before gap analysis for calibration, and once after for gap-targeted evidence
-                (agentic RAG). Downstream agents use this evidence to ground recommendations in what
-                happened before, not just the current candidate.
+                (knowledge entries and evaluations). Candidate analysis can retrieve calibration
+                evidence before gap analysis, unless the supervisor selects the minimal route, and
+                then performs a gap-targeted retrieval pass after analysis. Transcript review also
+                retrieves evidence before its evaluation branches. Downstream agents use this
+                history to ground recommendations in prior outcomes.
               </p>
             </div>
 
@@ -386,33 +394,39 @@ export default function AboutPage() {
 
       <Card id="about-orchestration-card">
         <CardHeader>
-          <CardTitle>Durable task orchestration</CardTitle>
+          <CardTitle>Run logging and durable tasks</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            Every agent run is tracked as typed tasks with idempotency keys, dependency graphs, and
-            persisted artifacts. This provides:
+            Every LangGraph execution is recorded as a workflow run with status, current node,
+            timings, output, and errors. Transcript evaluation and red-flag branches add durable
+            typed tasks and validated artifacts where replayable agent-level tracking is needed.
           </p>
           <ul className="list-disc space-y-1 pl-5">
             <li>
-              <strong>Task lifecycle</strong> — each agent invocation is a task with status
-              (pending, running, complete, failed, blocked), attempt count, and max attempts.
+              <strong>Workflow lifecycle</strong> — JD intake, resume intake, candidate analysis,
+              and transcript review each persist run status and node timings.
             </li>
             <li>
-              <strong>Typed artifacts</strong> — agent outputs are persisted as artifacts with
-              evidence claims, warnings, confidence scores, and schema versions, independent from
-              domain rows.
+              <strong>Durable transcript tasks</strong> — Transcript Evaluation and Red Flag tasks
+              track pending, running, complete, or failed state, attempts, and output artifacts.
+            </li>
+            <li>
+              <strong>Typed artifacts</strong> — validated transcript evaluations and red-flag
+              outputs persist evidence claims, warnings, confidence scores, and schema versions
+              independently from domain rows.
             </li>
             <li>
               <strong>Output validation</strong> — transcript evaluation quotes are verified against
               the source transcript; red flags must have evidence and consistent severity levels.
             </li>
             <li>
-              <strong>Event log</strong> — every agent start and completion is recorded as a typed
-              event for observability and replay.
+              <strong>Event log</strong> — transcript evaluation and red-flag task starts and
+              completions are recorded as typed events for observability.
             </li>
             <li>
-              <strong>Idempotency</strong> — tasks use unique idempotency keys so retries are safe.
+              <strong>Idempotency</strong> — durable transcript tasks use unique idempotency keys so
+              retries do not create duplicate task records.
             </li>
           </ul>
         </CardContent>
@@ -425,14 +439,18 @@ export default function AboutPage() {
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
             Demo mode makes the agentic system explainable without changing production decisions.
-            When Demo mode is enabled, the <strong>Under the Hood</strong> panel appears after a clear
-            visual break from application content and exposes the workflow&apos;s live mechanics.
+            It enables a persistent running-agent history near the page content and places the{' '}
+            <strong>Under the Hood</strong> panel after a clear visual break, exposing both individual
+            run explanations and the wider workflow mechanics.
           </p>
           <ul className="list-disc space-y-1 pl-5">
             <li>
-              <strong>Granular running-agent summary</strong> — identifies the current stage and
-              separately explains the model&apos;s role and the surrounding agentic orchestration,
-              including routing, RAG, validation, persistence, and human handoff.
+              <strong>Persistent running-agent history</strong> — Demo-only, newest-first cards retain
+              every captured run with status, timestamp, candidate context, current stage, AI
+              involvement, and orchestration details. Only the active request stage is presented as
+              running; other participating agents are recorded when the workflow confirms completion.
+              The compact feed shows roughly one and a half cards, keeps older runs scrollable across
+              navigation and reloads, remains open until closed, and clears only by manual Reset.
             </li>
             <li>
               <strong>Activity-scoped status checks</strong> — agent-status requests begin when a

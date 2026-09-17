@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiClientError } from '@/lib/api/client';
+import { redactResumePii } from '@/lib/ai/pii';
+import { useDemo } from '@/lib/demo/store';
 import { extractEmailFromText, extractFullNameFromText, extractPhoneFromText } from '@/lib/utils/extract-contact';
 import { toCamelCase } from '@/lib/utils/mask';
 import { DocumentUpload } from '@/components/shared/document-upload';
@@ -18,17 +20,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 export function AddCandidateForm({ jobId, jobParsed }: { jobId: string; jobParsed: boolean }) {
   const router = useRouter();
+  const demo = useDemo();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [resume, setResume] = useState('');
+  const [originalResume, setOriginalResume] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [runAnalysis, setRunAnalysis] = useState(jobParsed);
   const [pending, setPending] = useState(false);
   const [step, setStep] = useState<string | null>(null);
 
-  const tooShort = resume.trim().length < 50;
+  const tooShort = (originalResume ?? resume).trim().length < 50;
 
   // Auto-populate candidate details from the resume text when the user hasn't
   // already filled them in manually.
@@ -58,12 +62,12 @@ export function AddCandidateForm({ jobId, jobParsed }: { jobId: string; jobParse
     setPending(true);
     try {
       setStep('Saving candidate...');
-      const effectiveName = toCamelCase(fullName.trim() || extractFullNameFromText(resume) || 'Unnamed candidate') ?? 'Unnamed candidate';
+      const effectiveName = toCamelCase(fullName.trim() || extractFullNameFromText(originalResume ?? resume) || 'Unnamed candidate') ?? 'Unnamed candidate';
       const candidate = await api.post<{ id: string }>(`/jobs/${jobId}/candidates`, {
         full_name: effectiveName,
         email: email.trim() || null,
         phone: phone.trim() || null,
-        resume_raw: resume.trim(),
+        resume_raw: (originalResume ?? resume).trim(),
         source_file_name: fileName,
       });
 
@@ -129,21 +133,22 @@ export function AddCandidateForm({ jobId, jobParsed }: { jobId: string; jobParse
             label="Upload resume"
             hint="PDF, DOCX or TXT up to 10MB. Contact details are auto-filled from the resume."
             onExtracted={(text, name) => {
-              setResume(text);
+              const extractedName = extractFullNameFromText(text);
+              const extractedEmail = extractEmailFromText(text);
+              const extractedPhone = extractPhoneFromText(text);
+              setOriginalResume(text);
+              setResume(demo.state.enabled ? redactResumePii(text, {
+                names: [extractedName, fullName],
+                emails: [extractedEmail, email],
+                phones: [extractedPhone, phone],
+              }) : text);
               setFileName(name);
               // Auto-fill name from resume text first, fall back to filename.
               if (!fullName.trim()) {
-                const extracted = extractFullNameFromText(text);
-                setFullName(toCamelCase(extracted ?? name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim()) ?? '');
+                setFullName(toCamelCase(extractedName ?? name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim()) ?? '');
               }
-              if (!email.trim()) {
-                const extractedEmail = extractEmailFromText(text);
-                if (extractedEmail) setEmail(extractedEmail);
-              }
-              if (!phone.trim()) {
-                const extractedPhone = extractPhoneFromText(text);
-                if (extractedPhone) setPhone(extractedPhone);
-              }
+              if (!email.trim() && extractedEmail) setEmail(extractedEmail);
+              if (!phone.trim() && extractedPhone) setPhone(extractedPhone);
             }}
           />
 

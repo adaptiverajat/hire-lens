@@ -56,6 +56,7 @@ export function UnderTheHood() {
   const stages = useMemo(() => getWorkflowStages(pathname), [pathname]);
   const currentCandidateId = useMemo(() => candidateIdFromPath(pathname), [pathname]);
   const currentJobId = useMemo(() => jobIdFromPath(pathname), [pathname]);
+  const isJobOverview = /^\/jobs\/[a-f0-9-]+$/.test(pathname);
 
   const [minimized, setMinimized] = useState(false);
   const [traces, setTraces] = useState<Trace[]>([]);
@@ -199,20 +200,23 @@ export function UnderTheHood() {
 
   // Build inferred agent status for ALL candidates (used by the agent-runs list)
   // and for the current candidate (used by the WorkflowPath).
-  // Inference: the first running agent is the current stage. Earlier stages
-  // are complete, while later stages remain pending until they run.
+  // Inference: the latest valid running agent is the current stage. Earlier stages
+  // are complete, and a later completion supersedes stale running states.
   const inferredLogs = useMemo(() => {
     return Object.values(demo.state.candidateLogs)
       .map((entry) => {
         const statusMap = new Map(entry.agents.map((a) => [a.agent, a.status]));
-        const runningIndex = LIFECYCLE_ORDER.findIndex(
-          (agent) => statusMap.get(agent) === 'running',
+        const highestRunningIndex = LIFECYCLE_ORDER.reduce(
+          (highest, agent, index) =>
+            statusMap.get(agent) === 'running' ? index : highest,
+          -1,
         );
         const highestCompletedIndex = LIFECYCLE_ORDER.reduce(
           (highest, agent, index) =>
             statusMap.get(agent) === 'complete' ? index : highest,
           -1,
         );
+        const runningIndex = highestRunningIndex > highestCompletedIndex ? highestRunningIndex : -1;
 
         const inferred = LIFECYCLE_ORDER.map((agentName, i) => {
           const existing = entry.agents.find((a) => a.agent === agentName);
@@ -433,7 +437,7 @@ export function UnderTheHood() {
                 <Activity className="h-4 w-4" />
                 Current workflow
               </div>
-              {currentJobRun ? (
+              {currentJobRun && isJobOverview ? (
                 <WorkflowPath
                   stages={['JD Agent']}
                   agentStatus={currentJobRun.status}
@@ -447,6 +451,13 @@ export function UnderTheHood() {
                   title={currentWorkflowEntry.name && currentWorkflowEntry.name !== 'Unknown candidate'
                     ? displayName(currentWorkflowEntry.name, demo.state.enabled)
                     : currentWorkflowEntry.candidateId.slice(0, 8)}
+                  onSelect={setSelectedAgent}
+                />
+              ) : currentJobRun ? (
+                <WorkflowPath
+                  stages={['JD Agent']}
+                  agentStatus={currentJobRun.status}
+                  title={`Job ${currentJobRun.jobId.slice(0, 8)}`}
                   onSelect={setSelectedAgent}
                 />
               ) : (

@@ -237,9 +237,11 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
             const now = Date.now();
             for (let i = 0; i < idx; i++) {
               const prereq = LIFECYCLE[i];
-              const has = agents.some((a) => a.agent === prereq);
-              if (!has) {
+              const prereqIndex = agents.findIndex((a) => a.agent === prereq);
+              if (prereqIndex < 0) {
                 agents.push({ agent: prereq, status: 'complete', timestamp: now });
+              } else if (agents[prereqIndex].status === 'running') {
+                agents[prereqIndex] = { ...agents[prereqIndex], status: 'complete' };
               }
             }
           }

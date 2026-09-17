@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Loader2, Plus, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiClientError } from '@/lib/api/client';
+import { redactPii } from '@/lib/ai/pii';
+import { parseTranscript } from '@/lib/documents/transcript';
 import { DocumentUpload } from '@/components/shared/document-upload';
 import { EmptyState } from '@/components/shared/indicators';
 import { Button } from '@/components/ui/button';
@@ -34,11 +36,13 @@ const STAGES = [
 
 export function InterviewsPanel({
   candidateId,
+  candidateName,
   interviews,
   evaluations,
   demo = false,
 }: {
   candidateId: string;
+  candidateName: string;
   interviews: InterviewRow[];
   evaluations: EvaluationRow[];
   demo?: boolean;
@@ -52,6 +56,7 @@ export function InterviewsPanel({
 
   const [transcriptFor, setTranscriptFor] = useState<string | null>(null);
   const [transcriptText, setTranscriptText] = useState('');
+  const [originalTranscriptText, setOriginalTranscriptText] = useState<string | null>(null);
   const [transcriptSource, setTranscriptSource] = useState<string>('teams');
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -79,7 +84,8 @@ export function InterviewsPanel({
   }
 
   async function saveTranscript(interviewId: string) {
-    if (transcriptText.trim().length < 50) {
+    const textToSave = originalTranscriptText ?? transcriptText;
+    if (textToSave.trim().length < 50) {
       toast.error('Transcript must be at least 50 characters');
       return;
     }
@@ -87,12 +93,13 @@ export function InterviewsPanel({
     setBusy(`transcript-${interviewId}`);
     try {
       await api.post(`/interviews/${interviewId}/transcripts`, {
-        raw_text: transcriptText.trim(),
+        raw_text: textToSave.trim(),
         source: transcriptSource,
       });
       toast.success('Transcript saved. Run Evaluate to assess it.');
       setTranscriptFor(null);
       setTranscriptText('');
+      setOriginalTranscriptText(null);
       refresh();
     } catch (error) {
       toast.error(error instanceof ApiClientError ? error.message : 'Could not save the transcript');
@@ -229,7 +236,13 @@ export function InterviewsPanel({
                         label="Upload transcript"
                         accept=".vtt,.txt,.docx,.pdf"
                         hint="Teams .vtt export, or any text file."
-                        onExtracted={(text) => setTranscriptText(text)}
+                        onExtracted={(text) => {
+                          const participants = parseTranscript(text).participants;
+                          setOriginalTranscriptText(text);
+                          setTranscriptText(demo ? redactPii(text, {
+                            names: [candidateName, interview.interviewer_name, ...participants],
+                          }) : text);
+                        }}
                       />
                     </div>
 
@@ -243,7 +256,11 @@ export function InterviewsPanel({
                         )}
                         Save transcript
                       </Button>
-                      <Button variant="ghost" onClick={() => setTranscriptFor(null)}>
+                      <Button variant="ghost" onClick={() => {
+                        setTranscriptFor(null);
+                        setTranscriptText('');
+                        setOriginalTranscriptText(null);
+                      }}>
                         Cancel
                       </Button>
                     </div>
@@ -261,6 +278,7 @@ export function InterviewsPanel({
                     onClick={() => {
                       setTranscriptFor(interview.id);
                       setTranscriptText('');
+                      setOriginalTranscriptText(null);
                     }}
                   >
                     Add transcript

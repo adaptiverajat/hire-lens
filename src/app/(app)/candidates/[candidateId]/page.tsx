@@ -227,6 +227,7 @@ export default async function CandidatePage({ params }: Props) {
         <TabsContent value="interviews" id="candidate-interviews-tab" className="mt-6">
           <InterviewsPanel
             candidateId={candidateId}
+            candidateName={candidate.full_name}
             interviews={(interviews.data ?? []) as InterviewRow[]}
             evaluations={typedEvaluations}
             demo={demo}
