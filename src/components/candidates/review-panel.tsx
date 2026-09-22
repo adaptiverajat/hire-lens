@@ -55,6 +55,7 @@ export function ReviewPanel({
 
   const [decision, setDecision] = useState<string>('');
   const [notes, setNotes] = useState('');
+  const [verifiedGaps, setVerifiedGaps] = useState('');
   const [busy, setBusy] = useState(false);
 
   const openFlags = flags.filter((f) => f.status === 'open');
@@ -89,11 +90,16 @@ export function ReviewPanel({
         agent_recommendation: agentRecommendation,
         final_decision: decision,
         notes: notes.trim(),
+        verified_gaps: verifiedGaps
+          .split(/\r?\n/)
+          .map((gap) => gap.trim())
+          .filter(Boolean),
         resolve_flags: true,
       });
 
       toast.success('Decision recorded and added to the knowledge base');
       setNotes('');
+      setVerifiedGaps('');
       setDecision('');
       startTransition(() => router.refresh());
     } catch (error) {
@@ -252,6 +258,17 @@ export function ReviewPanel({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="verified-gaps">Expert-verified gaps</Label>
+              <Textarea
+                id="verified-gaps"
+                value={verifiedGaps}
+                onChange={(e) => setVerifiedGaps(e.target.value)}
+                rows={4}
+                placeholder={'One verified gap per line. These become retrievable evidence for future cases.'}
+              />
             </div>
 
             <div className="space-y-2">

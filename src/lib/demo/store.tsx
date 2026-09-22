@@ -44,7 +44,6 @@ export interface DemoState {
   settingsVersion: number;
   enabled: boolean;
   showAgentRunsPerCandidate: boolean;
-  showTokens: boolean;
   showNextDevTools: boolean;
   credentials: DemoCredentials;
   prompts: Record<string, PromptOverride>;
@@ -59,7 +58,6 @@ const DEFAULT_STATE: DemoState = {
   settingsVersion: 2,
   enabled: false,
   showAgentRunsPerCandidate: true,
-  showTokens: false,
   showNextDevTools: false,
   credentials: {
     openaiKey: '',
@@ -81,7 +79,8 @@ function loadState(): DemoState {
     const parsed = JSON.parse(raw);
     const migrated = parsed?.settingsVersion === DEFAULT_STATE.settingsVersion
       ? parsed
-      : { ...parsed, settingsVersion: DEFAULT_STATE.settingsVersion, showTokens: false };
+      : { ...parsed, settingsVersion: DEFAULT_STATE.settingsVersion };
+    delete migrated.showTokens;
     return { ...DEFAULT_STATE, ...migrated, credentials: { ...DEFAULT_STATE.credentials, ...migrated?.credentials }, prompts: migrated?.prompts ?? {}, completedAgents: migrated?.completedAgents ?? [], candidateLogs: migrated?.candidateLogs ?? {}, jobLogs: migrated?.jobLogs ?? {} };
   } catch {
     return DEFAULT_STATE;
@@ -93,7 +92,6 @@ interface DemoContextValue {
   loaded: boolean;
   setEnabled: (enabled: boolean) => void;
   setShowAgentRunsPerCandidate: (show: boolean) => void;
-  setShowTokens: (show: boolean) => void;
   setShowNextDevTools: (show: boolean) => void;
   setCredentials: (credentials: Partial<DemoCredentials>) => void;
   getPrompt: (agent: string) => PromptOverride | undefined;
@@ -132,11 +130,6 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
 
   const setShowAgentRunsPerCandidate = useCallback((showAgentRunsPerCandidate: boolean) => {
     setState((prev) => ({ ...prev, showAgentRunsPerCandidate }));
-  }, []);
-
-  const setShowTokens = useCallback((showTokens: boolean) => {
-    setState((prev) => ({ ...prev, showTokens }));
-    document.cookie = `hirelens_show_tokens=${showTokens}; path=/; max-age=31536000; samesite=lax`;
   }, []);
 
   const setShowNextDevTools = useCallback((showNextDevTools: boolean) => {
@@ -321,7 +314,7 @@ export function DemoProvider({ children, initialEnabled }: { children: ReactNode
 
   return (
     <DemoContext.Provider
-      value={{ state, loaded, setEnabled, setShowAgentRunsPerCandidate, setShowTokens, setShowNextDevTools, setCredentials, getPrompt, setPrompt, resetPrompt, markAgentComplete, resetCompletedAgents, logCandidateAgent, logJobAgent, setCandidateName, removeCandidateLog, clearCandidateLogs }}
+      value={{ state, loaded, setEnabled, setShowAgentRunsPerCandidate, setShowNextDevTools, setCredentials, getPrompt, setPrompt, resetPrompt, markAgentComplete, resetCompletedAgents, logCandidateAgent, logJobAgent, setCandidateName, removeCandidateLog, clearCandidateLogs }}
     >
       {children}
     </DemoContext.Provider>

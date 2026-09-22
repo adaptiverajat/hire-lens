@@ -59,25 +59,6 @@ export function DemoSettings() {
 
         <div className="flex items-start gap-3">
           <Checkbox
-            id="show-tokens"
-            checked={demo.state.showTokens}
-            onCheckedChange={(checked) => {
-              demo.setShowTokens(checked === true);
-              startTransition(() => router.refresh());
-            }}
-          />
-          <div>
-            <Label htmlFor="show-tokens" className="font-medium">
-              Show token usage
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Show or hide token KPIs and token details throughout the application.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-start gap-3">
-          <Checkbox
             id="show-next-dev-tools"
             checked={demo.state.showNextDevTools}
             onCheckedChange={(checked) => demo.setShowNextDevTools(checked === true)}

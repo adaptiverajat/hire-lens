@@ -12,7 +12,7 @@ export const metadata = { title: 'About - HireLens' };
 
 export default function AboutPage() {
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
+    <div className="mx-auto max-w-6xl space-y-6 p-6">
       <div className="flex items-center gap-3">
         <h1 className="text-3xl font-semibold tracking-tight">HireLens</h1>
         <Badge variant="secondary">v{version}</Badge>
@@ -52,14 +52,17 @@ export default function AboutPage() {
               candidates).
             </li>
             <li>
-              <strong>Evidence-based matching</strong> — computes a deterministic weighted coverage
-              score and uses an LLM to add qualitative gap analysis with cited reasoning.
+              <strong>Evidence-based matching</strong> — computes a deterministic,
+              importance-weighted coverage score and reconciles an LLM qualitative assessment
+              against it within a fixed tolerance. The result is shown as the candidate&apos;s
+              evidence match score — not a pure keyword match.
             </li>
             <li>
-              <strong>Iterative evidence retrieval (agentic RAG)</strong> — runs a second vector
-              search pass after gap analysis, targeted at the specific missing and partial skills
-              identified, so interview questions are grounded in how similar gaps were validated
-              historically.
+              <strong>Intent-driven Agentic RAG</strong> — an Evidence Retrieval Agent first resolves
+              the workflow intent, creates multiple privacy-safe semantic queries, searches historical
+              cases, deduplicates and ranks the results, and passes that context to reasoning agents.
+              Candidate analysis adds a second pass after gap analysis, targeted at the missing and
+              partial skills it discovered.
             </li>
             <li>
               <strong>Cross-candidate reasoning</strong> — fetches a summary of other candidates in
@@ -76,8 +79,10 @@ export default function AboutPage() {
               quotes.
             </li>
             <li>
-              <strong>Red-flag detection</strong> — surfaces inconsistencies between the resume and
-              the interview (advisory only; never auto-rejects).
+              <strong>Case-grounded red-flag detection</strong> — surfaces checkable inconsistencies
+              between the resume and interview only when direct source quotes and retrieved historical
+              case IDs both support the concern. Invalid quotes or invented case citations fail
+              mechanical validation and trigger reflexion. Flags remain advisory and never auto-reject.
             </li>
             <li>
               <strong>Reflexion loops</strong> — when an agent&apos;s output fails validation, it
@@ -100,8 +105,10 @@ export default function AboutPage() {
               idempotency keys, events, and validated artifacts.
             </li>
             <li>
-              <strong>Learning knowledge base</strong> — stores past evaluations and interview
-              assessments for RAG-driven grounding of future recommendations.
+              <strong>Closed-loop learning knowledge base</strong> — stores evaluations, reviewer
+              decisions, overrides, and explicitly expert-verified gaps as privacy-filtered vectors.
+              Future retrieval plans can recover these cases as grounded precedent, while verified
+              gaps also become high-confidence Gap Analysis calibration memory.
             </li>
             <li>
               <strong>Pre-interview export</strong> — generates a printable PDF report per candidate
@@ -116,7 +123,7 @@ export default function AboutPage() {
             </li>
             <li>
               <strong>Candidate comparison</strong> — side-by-side comparison of all candidates in a
-              job pipeline, ranked by interview rating and match score, with technical and
+              job pipeline, ranked by interview rating and evidence match score, with technical and
               communication scores, flags, and decisions.
             </li>
             <li>
@@ -130,9 +137,14 @@ export default function AboutPage() {
               trail but no longer gates access.
             </li>
             <li>
-              <strong>Optional token usage tracking</strong> — captures per-agent prompt,
-              completion, and total token counts. The display is off by default and can be enabled
-              from Settings for candidate and agent-level cost visibility.
+              <strong>Dashboard</strong> — open and closed position lists with expandable
+              candidate rows, alongside open-job and pipeline-stage distribution stats.
+            </li>
+            <li>
+              <strong>Token usage tracking</strong> — captures per-agent prompt, completion, and
+              total token counts on every workflow run. A dedicated Tokens usage section in
+              Settings reports total and monthly usage, per-agent and per-candidate breakdowns,
+              and estimated model cost.
             </li>
           </ul>
           <p>
@@ -143,54 +155,154 @@ export default function AboutPage() {
         </CardContent>
       </Card>
 
-      <Card id="about-privacy-card" className="border-emerald-500/20">
+      <Card id="about-agentic-ai-card" className="border-primary/20">
         <CardHeader>
-          <CardTitle>Candidate privacy and AI boundaries</CardTitle>
+          <CardTitle className="text-primary">Agentic AI</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            Candidate PII is kept inside the application and removed before content reaches an
-            external chat or embedding model. The control is enforced centrally rather than relying
-            only on individual agent prompts.
+            The platform is built around specialised agents coordinated by LangGraph. Retrieval is
+            itself agentic: a structured-output planner resolves intent and generates diverse semantic
+            queries before pgvector search, then downstream LLM agents reason over the deduplicated
+            cases. Supervisor nodes choose execution depth, reflexion retries invalid evidence, and
+            shared memory carries expert calibration between runs. Deterministic checks and human
+            review remain outside the model boundary.
           </p>
-          <ul className="list-disc space-y-1 pl-5">
+
+          <Separator />
+
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-medium text-foreground">JD Agent</h3>
+              <p className="text-sm">
+                Reads a raw job description and extracts a precise, structured requirement profile.
+                Splits compound requirements, assigns 0-100 importance, categorises skills,
+                technologies, experience, certifications, and domains, and marks required vs.
+                nice-to-have items.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground">Resume Agent</h3>
+              <p className="text-sm">
+                Receives a privacy-filtered resume after contact fields are extracted locally.
+                Captures skills with evidence and proficiency, employment and project history,
+                inferred technologies, and total experience without receiving the candidate&apos;s
+                identity, contact details, location, or education institutions.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground">Evidence Retrieval Agent</h3>
+              <p className="text-sm">
+                Resolves a typed retrieval intent, plans two to four distinct semantic queries, and
+                searches privacy-filtered knowledge entries and evaluations in pgvector. It merges
+                duplicate owners, ranks the strongest cases, and injects stable case IDs, outcomes,
+                and excerpts into downstream prompts. Candidate analysis uses candidate-fit and
+                gap-validation plans; transcript review uses separate interview-evaluation and
+                red-flag-grounding plans.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground">Gap Analysis Agent</h3>
+              <p className="text-sm">
+                Compares a job&apos;s requirements against the candidate&apos;s profile and produces
+                an evidence-weighted match score, verdict, strong skills, missing skills, partial
+                matches, and areas to validate. Receives peer context (other candidates in the
+                pipeline) so it can differentiate between similarly-matched candidates. Reads
+                calibration notes from shared agent memory before running.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground">Question Agent</h3>
+              <p className="text-sm">
+                Generates a tailored interview question set based on the gap analysis and
+                gap-targeted evidence. Produces screening, deep technical, gap validation, and
+                experience validation questions with expected signals and rationale.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground">Transcript Evaluation Agent</h3>
+              <p className="text-sm">
+                Evaluates an interview transcript against the planned question set. Scores technical
+                and communication separately, records signals hit and missed, and requires every
+                judgement to cite a direct quote. Uses reflexion: if validation fails (e.g. a quote
+                is not found in the transcript), the agent retries with feedback. Reads calibration
+                notes from shared agent memory before running.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground">Red Flag Agent</h3>
+              <p className="text-sm">
+                Scans for inconsistencies between the resume and interview after a dedicated
+                red-flag retrieval plan searches comparable, expert-verified cases. Every non-GREEN
+                flag must contain a direct resume, transcript, or job quote plus at least one exact
+                retrieved case ID and relevance explanation. Validators confirm that quotes exist in
+                their claimed source and case IDs were actually retrieved; reflexion retries failures.
+                Returns advisory GREEN, YELLOW, or RED levels and never makes the hiring decision.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-foreground">Human Review Agent</h3>
+              <p className="text-sm">
+                Synthesises the match analysis, transcript evaluation, and red flags into a decision
+                packet for a human reviewer. Recommends advance, hold, or reject, with a headline,
+                key evidence, open questions, and comparable historical cases. Reads calibration
+                notes from shared agent memory before running.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card id="about-workflow-card">
+        <CardHeader>
+          <CardTitle>How the workflow fits together</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-muted-foreground">
+          <p className="text-sm">
+            The main lifecycle is modelled as four LangGraph workflows:
+          </p>
+          <ol className="list-decimal space-y-1 pl-5 text-sm">
             <li>
-              <strong>Central outbound sanitisation</strong> — system prompts, user templates, and
-              nested model inputs pass through the same privacy filter before every structured LLM
-              invocation.
+              <strong>JD intake</strong> — load → extract structured JD → persist → index vectors.
             </li>
             <li>
-              <strong>Identity and contact redaction</strong> — known candidate names, email
-              addresses, phone numbers, locations, participant names, addresses, and URLs are
-              replaced with non-identifying placeholders.
+              <strong>Resume intake</strong> — load → extract contact fields locally → redact PII →
+              extract a structured profile → persist → index privacy-filtered vectors.
             </li>
             <li>
-              <strong>Education privacy</strong> — college, university, institute, school, and
-              academy references are redacted, and education sections are removed from resume text
-              sent to AI models.
+              <strong>Candidate analysis</strong> — load → route analysis (supervisor) → load peer
+              context → plan and run candidate-fit retrieval → gap analysis → plan and run
+              gap-validation retrieval → persist analysis → generate questions → persist questions.
             </li>
             <li>
-              <strong>Local contact preservation</strong> — name, email, and phone extraction occurs
-              locally so authorised recruiters can still use those fields without asking the Resume
-              Agent to process them.
+              <strong>Transcript review</strong> — load → plan and retrieve evaluation evidence →
+              evaluate transcript, while a dedicated red-flag planner retrieves precedent → detect
+              mechanically grounded red flags → persist results → synthesise review → index the
+              assessment as future knowledge.
             </li>
-            <li>
-              <strong>Demo-safe document previews</strong> — when Demo mode is enabled, uploaded
-              resumes and transcripts are redacted before appearing in editable text areas. The
-              original extracted values are retained separately and saved for authorised future
-              retrieval; outbound AI processing still applies the central privacy boundary.
-            </li>
-            <li>
-              <strong>Privacy-filtered vector search</strong> — document chunks and semantic-search
-              queries are sanitised before embedding. Candidate embedding text is anonymous and does
-              not include education history.
-            </li>
-            <li>
-              <strong>Transcript protection</strong> — candidate and participant identities plus
-              known education institutions are removed before transcript evaluation and red-flag
-              analysis.
-            </li>
-          </ul>
+          </ol>
+          <p className="text-sm">
+            The supervisor node inspects coverage signals and candidate seniority before analysis to
+            decide depth (minimal, standard, or deep). Cross-candidate reasoning feeds a summary of
+            the candidate pool into the Gap Analysis Agent. Reflexion loops retry agents on
+            validation failure with feedback. Shared agent memory persists calibration notes from
+            reviewer overrides and validation failures, which agents read before each run.
+            Reviewers can also record explicit verified gaps; those gaps are embedded in the learning
+            repository and written to Gap Analysis memory for future retrieval and calibration.
+          </p>
+          <p className="text-sm">
+            Privacy-filtered vector indexes for job descriptions, anonymous candidate profiles,
+            questions, evaluations, reviewer decisions, and verified gaps feed the Evidence Retrieval
+            Agent, giving the system explicit evidence memory without sending candidate PII to the
+            embedding provider.
+          </p>
         </CardContent>
       </Card>
 
@@ -247,148 +359,105 @@ export default function AboutPage() {
         </CardContent>
       </Card>
 
-      <Card id="about-agentic-ai-card" className="border-primary/20">
+      <Card id="about-observability-card">
         <CardHeader>
-          <CardTitle className="text-primary">Agentic AI</CardTitle>
+          <CardTitle>Under the Hood: observability</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-muted-foreground">
           <p>
-            The platform is built around specialised agents coordinated by LangGraph. LLM agents
-            produce Zod-validated structured outputs, retrieval agents use privacy-filtered
-            embeddings, supervisor nodes choose execution depth, and reflexion loops retry invalid
-            evidence. Shared memory carries calibration between runs, while deterministic checks and
-            human review remain outside the model boundary.
+            Demo mode makes the agentic system explainable without changing production decisions.
+            It enables a persistent running-agent history near the page content and places the{' '}
+            <strong>Under the Hood</strong> panel after a clear visual break, exposing both individual
+            run explanations and the wider workflow mechanics.
           </p>
-
-          <Separator />
-
-          <div className="space-y-4">
-            <div>
-              <h3 className="font-medium text-foreground">JD Agent</h3>
-              <p className="text-sm">
-                Reads a raw job description and extracts a precise, structured requirement profile.
-                Splits compound requirements, assigns 0-100 importance, categorises skills,
-                technologies, experience, certifications, and domains, and marks required vs.
-                nice-to-have items.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-medium text-foreground">Resume Agent</h3>
-              <p className="text-sm">
-                Receives a privacy-filtered resume after contact fields are extracted locally.
-                Captures skills with evidence and proficiency, employment and project history,
-                inferred technologies, and total experience without receiving the candidate&apos;s
-                identity, contact details, location, or education institutions.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-medium text-foreground">Evidence Retrieval Agent</h3>
-              <p className="text-sm">
-                Performs vector search over pgvector to retrieve comparable historical cases
-                (knowledge entries and evaluations). Candidate analysis can retrieve calibration
-                evidence before gap analysis, unless the supervisor selects the minimal route, and
-                then performs a gap-targeted retrieval pass after analysis. Transcript review also
-                retrieves evidence before its evaluation branches. Downstream agents use this
-                history to ground recommendations in prior outcomes.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-medium text-foreground">Gap Analysis Agent</h3>
-              <p className="text-sm">
-                Compares a job&apos;s requirements against the candidate&apos;s profile and produces a
-                match score, verdict, strong skills, missing skills, partial matches, and areas to
-                validate. Receives peer context (other candidates in the pipeline) so it can
-                differentiate between similarly-matched candidates. Reads calibration notes from
-                shared agent memory before running.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-medium text-foreground">Question Agent</h3>
-              <p className="text-sm">
-                Generates a tailored interview question set based on the gap analysis and
-                gap-targeted evidence. Produces screening, deep technical, gap validation, and
-                experience validation questions with expected signals and rationale.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-medium text-foreground">Transcript Evaluation Agent</h3>
-              <p className="text-sm">
-                Evaluates an interview transcript against the planned question set. Scores technical
-                and communication separately, records signals hit and missed, and requires every
-                judgement to cite a direct quote. Uses reflexion: if validation fails (e.g. a quote
-                is not found in the transcript), the agent retries with feedback. Reads calibration
-                notes from shared agent memory before running.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-medium text-foreground">Red Flag Agent</h3>
-              <p className="text-sm">
-                Scans for inconsistencies between the resume and the interview, such as seniority
-                mismatches, project-depth issues, contradictions, unrealistic claims, and timeline
-                problems. Returns GREEN, YELLOW, or RED levels. Advisory only. Uses reflexion: if
-                validation fails (e.g. a flag has no evidence), the agent retries with feedback.
-                Reads calibration notes from shared agent memory before running.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-medium text-foreground">Human Review Agent</h3>
-              <p className="text-sm">
-                Synthesises the match analysis, transcript evaluation, and red flags into a decision
-                packet for a human reviewer. Recommends advance, hold, or reject, with a headline,
-                key evidence, open questions, and comparable historical cases. Reads calibration
-                notes from shared agent memory before running.
-              </p>
-            </div>
-          </div>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              <strong>Persistent running-agent history</strong> — Demo-only, newest-first cards retain
+              every captured run with status, timestamp, candidate context, current stage, AI
+              involvement, and orchestration details. Only the active request stage is presented as
+              running; other participating agents are recorded when the workflow confirms completion.
+              The compact feed shows roughly one and a half cards, keeps older runs scrollable across
+              navigation and reloads, remains open until closed, and clears only by manual Reset.
+            </li>
+            <li>
+              <strong>Activity-scoped status checks</strong> — agent-status requests begin when a
+              user action starts an AI workflow, continue only while a server-side run is active,
+              and stop when the run finishes or no active run is returned.
+            </li>
+            <li>
+              <strong>Current workflow</strong> — shows each specialised agent in lifecycle order
+              with running, complete, and failed states.
+            </li>
+            <li>
+              <strong>Agent runs per candidate</strong> — an independent Settings toggle controls
+              the separate stacked candidate workflow history without hiding Under the Hood itself.
+            </li>
+            <li>
+              <strong>Centralised token metrics</strong> — per-agent token usage is persisted with
+              each workflow run and reported only in Settings under Tokens usage, covering totals,
+              monthly usage, per-agent and per-candidate breakdowns, and estimated cost.
+            </li>
+            <li>
+              <strong>Prompt editor</strong> — displays and overrides agent system and user templates
+              at runtime for controlled prompt-engineering demonstrations. Outbound values still pass
+              through the central PII filter.
+            </li>
+            <li>
+              <strong>Developer display control</strong> — the Next.js bottom-left development menu
+              is hidden by default and can be shown with a development-only Settings flag.
+            </li>
+          </ul>
         </CardContent>
       </Card>
 
-      <Card id="about-workflow-card">
+      <Card id="about-privacy-card" className="border-emerald-500/20">
         <CardHeader>
-          <CardTitle>How the workflow fits together</CardTitle>
+          <CardTitle>Candidate privacy and AI boundaries</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-muted-foreground">
-          <p className="text-sm">
-            The main lifecycle is modelled as four LangGraph workflows:
+        <CardContent className="space-y-4 text-muted-foreground">
+          <p>
+            Candidate PII is kept inside the application and removed before content reaches an
+            external chat or embedding model. The control is enforced centrally rather than relying
+            only on individual agent prompts.
           </p>
-          <ol className="list-decimal space-y-1 pl-5 text-sm">
+          <ul className="list-disc space-y-1 pl-5">
             <li>
-              <strong>JD intake</strong> — load → extract structured JD → persist → index vectors.
+              <strong>Central outbound sanitisation</strong> — system prompts, user templates, and
+              nested model inputs pass through the same privacy filter before every structured LLM
+              invocation.
             </li>
             <li>
-              <strong>Resume intake</strong> — load → extract contact fields locally → redact PII →
-              extract a structured profile → persist → index privacy-filtered vectors.
+              <strong>Identity and contact redaction</strong> — known candidate names, email
+              addresses, phone numbers, locations, participant names, addresses, and URLs are
+              replaced with non-identifying placeholders.
             </li>
             <li>
-              <strong>Candidate analysis</strong> — load → route analysis (supervisor) → load peer
-              context → retrieve evidence → gap analysis → retrieve gap evidence (agentic RAG) →
-              persist analysis → generate questions → persist questions.
+              <strong>Education privacy</strong> — college, university, institute, school, and
+              academy references are redacted, and education sections are removed from resume text
+              sent to AI models.
             </li>
             <li>
-              <strong>Transcript review</strong> — load → retrieve evidence → [evaluate transcript
-              <code> || </code>detect red flags] (parallel, both with reflexion) → persist evaluation +
-              persist flags → synthesise review → add to knowledge base.
+              <strong>Local contact preservation</strong> — name, email, and phone extraction occurs
+              locally so authorised recruiters can still use those fields without asking the Resume
+              Agent to process them.
             </li>
-          </ol>
-          <p className="text-sm">
-            The supervisor node inspects coverage signals and candidate seniority before analysis to
-            decide depth (minimal, standard, or deep). Cross-candidate reasoning feeds a summary of
-            the candidate pool into the Gap Analysis Agent. Reflexion loops retry agents on
-            validation failure with feedback. Shared agent memory persists calibration notes from
-            reviewer overrides and validation failures, which agents read before each run.
-          </p>
-          <p className="text-sm">
-            Privacy-filtered vector indexes for job descriptions, anonymous candidate profiles,
-            questions, and evaluations feed the Evidence Retrieval Agent, giving the system an
-            explicit evidence memory without sending candidate PII to the embedding provider.
-          </p>
+            <li>
+              <strong>Demo-safe document previews</strong> — when Demo mode is enabled, uploaded
+              resumes and transcripts are redacted before appearing in editable text areas. The
+              original extracted values are retained separately and saved for authorised future
+              retrieval; outbound AI processing still applies the central privacy boundary.
+            </li>
+            <li>
+              <strong>Privacy-filtered vector search</strong> — document chunks and semantic-search
+              queries are sanitised before embedding. Candidate embedding text is anonymous and does
+              not include education history.
+            </li>
+            <li>
+              <strong>Transcript protection</strong> — candidate and participant identities plus
+              known education institutions are removed before transcript evaluation and red-flag
+              analysis.
+            </li>
+          </ul>
         </CardContent>
       </Card>
 
@@ -427,57 +496,6 @@ export default function AboutPage() {
             <li>
               <strong>Idempotency</strong> — durable transcript tasks use unique idempotency keys so
               retries do not create duplicate task records.
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
-
-      <Card id="about-observability-card">
-        <CardHeader>
-          <CardTitle>Under the Hood: observability</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-muted-foreground">
-          <p>
-            Demo mode makes the agentic system explainable without changing production decisions.
-            It enables a persistent running-agent history near the page content and places the{' '}
-            <strong>Under the Hood</strong> panel after a clear visual break, exposing both individual
-            run explanations and the wider workflow mechanics.
-          </p>
-          <ul className="list-disc space-y-1 pl-5">
-            <li>
-              <strong>Persistent running-agent history</strong> — Demo-only, newest-first cards retain
-              every captured run with status, timestamp, candidate context, current stage, AI
-              involvement, and orchestration details. Only the active request stage is presented as
-              running; other participating agents are recorded when the workflow confirms completion.
-              The compact feed shows roughly one and a half cards, keeps older runs scrollable across
-              navigation and reloads, remains open until closed, and clears only by manual Reset.
-            </li>
-            <li>
-              <strong>Activity-scoped status checks</strong> — agent-status requests begin when a
-              user action starts an AI workflow, continue only while a server-side run is active,
-              and stop when the run finishes or no active run is returned.
-            </li>
-            <li>
-              <strong>Current workflow</strong> — shows each specialised agent in lifecycle order
-              with running, complete, and failed states.
-            </li>
-            <li>
-              <strong>Agent runs per candidate</strong> — an independent Settings toggle controls
-              the separate stacked candidate workflow history without hiding Under the Hood itself.
-            </li>
-            <li>
-              <strong>Optional token visibility</strong> — token totals are captured per agent but
-              hidden by default; recruiters can opt in from Settings to see candidate and agent-level
-              prompt, completion, and total usage.
-            </li>
-            <li>
-              <strong>Prompt editor</strong> — displays and overrides agent system and user templates
-              at runtime for controlled prompt-engineering demonstrations. Outbound values still pass
-              through the central PII filter.
-            </li>
-            <li>
-              <strong>Developer display control</strong> — the Next.js bottom-left development menu
-              is hidden by default and can be shown with a development-only Settings flag.
             </li>
           </ul>
         </CardContent>

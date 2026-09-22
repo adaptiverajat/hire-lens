@@ -2,6 +2,7 @@ import { getDemoEnabled } from '@/lib/demo/server-store';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/indicators';
 import { ButtonLink } from '@/components/shared/button-link';
+import { AddCandidateDialog } from '@/components/candidates/add-candidate-dialog';
 import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import { CandidatesListWithExport } from '@/components/candidates/post-interview-export';
 import type { EvaluationRow, FeedbackRow, FlagRowFull, InterviewRow } from '@/types/domain';
@@ -22,7 +23,7 @@ export default async function CandidatesPage() {
 
   const { data: jobs } = await db
     .from('jobs')
-    .select('id, title, status, created_at')
+    .select('id, title, status, department, location, created_at')
     .order('created_at', { ascending: false });
 
   const jobIds = (jobs ?? []).map((j) => j.id);
@@ -124,6 +125,18 @@ export default async function CandidatesPage() {
       <PageHeader
         title="Candidates"
         description="Every candidate grouped by the role they applied for, latest jobs first."
+        actions={
+          <AddCandidateDialog
+            jobs={(jobs ?? [])
+              .filter((j) => j.status === 'open')
+              .map(({ id, title, department, location }) => ({
+                id,
+                title,
+                department,
+                location,
+              }))}
+          />
+        }
       />
 
       {jobIds.length === 0 ? (

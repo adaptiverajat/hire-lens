@@ -75,10 +75,10 @@ function buildExportHtml(
       : '<p>No mandatory requirements are missing.</p>';
 
     analysisHtml = `
-      <h2>Match Analysis</h2>
+      <h2>Evidence Match Analysis</h2>
       <div class="score-box">
         <span class="score">${score}%</span>
-        ${verdict ? `<span class="verdict">${verdict}</span>` : ''}
+        <span class="verdict">evidence match${verdict ? ` · ${verdict}` : ''}</span>
       </div>
       ${summary ? `<p class="summary">${summary}</p>` : ''}
 
@@ -89,7 +89,7 @@ function buildExportHtml(
       ${gaps}
     `;
   } else {
-    analysisHtml = '<h2>Match Analysis</h2><p>Not analysed yet.</p>';
+    analysisHtml = '<h2>Evidence Match Analysis</h2><p>Not analysed yet.</p>';
   }
 
   // Interview questions section

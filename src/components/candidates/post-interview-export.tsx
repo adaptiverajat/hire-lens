@@ -512,7 +512,7 @@ export function CandidatesListWithExport({
                     <Link href={`/candidates/${c.id}`} className="block">
                       <Card
                         id={`candidate-card-${c.id}`}
-                        className={`transition-colors hover:ring-foreground/20 ${
+                        className={`transition-colors hover:bg-blue-200 hover:ring-blue-300 dark:hover:bg-blue-950/40 ${
                           selected.has(c.id) ? 'ring-2 ring-primary' : ''
                         }`}
                       >

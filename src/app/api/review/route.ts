@@ -15,6 +15,7 @@ const reviewSchema = z.object({
   agent_recommendation: z.string().max(60).nullish(),
   final_decision: z.enum(['advance', 'hold', 'reject', 'hire']),
   notes: z.string().min(10, 'Please record why you reached this decision'),
+  verified_gaps: z.array(z.string().min(2).max(300)).max(20).default([]),
   resolve_flags: z.boolean().default(true),
 });
 
@@ -96,6 +97,7 @@ export const POST = withAuth(async (ctx, request: Request) => {
     `Role: ${job?.title ?? 'unknown'}`,
     `Reviewer decision: ${body.final_decision} (${body.decision})`,
     body.agent_recommendation ? `Agent had recommended: ${body.agent_recommendation}` : null,
+    body.verified_gaps.length > 0 ? `Expert-verified gaps:\n- ${body.verified_gaps.join('\n- ')}` : null,
     `Reviewer reasoning: ${body.notes}`,
   ]
     .filter(Boolean)
@@ -117,6 +119,7 @@ export const POST = withAuth(async (ctx, request: Request) => {
         outcome: body.final_decision,
         decision_type: body.decision,
         job_title: job?.title ?? null,
+        verified_gaps: body.verified_gaps,
       },
       created_by: ctx.userId,
     })
@@ -131,7 +134,7 @@ export const POST = withAuth(async (ctx, request: Request) => {
       jobId,
       candidateId: body.candidate_id,
       content,
-      metadata: { title, outcome: body.final_decision, kind },
+      metadata: { title, outcome: body.final_decision, kind, verified_gaps: body.verified_gaps },
     });
   }
 
@@ -159,6 +162,19 @@ export const POST = withAuth(async (ctx, request: Request) => {
         final_decision: body.final_decision,
         reviewer_notes: body.notes,
       },
+    });
+  }
+
+  if (body.verified_gaps.length > 0) {
+    await writeAgentMemory({
+      agentName: 'Gap Analysis Agent',
+      noteType: 'insight',
+      source: 'cross_agent',
+      content: `Expert-verified gaps for ${job?.title ?? 'this role'}: ${body.verified_gaps.join('; ')}`,
+      confidence: 0.95,
+      jobId,
+      candidateId: body.candidate_id,
+      metadata: { verified_gaps: body.verified_gaps, feedback_id: feedback.id },
     });
   }
 

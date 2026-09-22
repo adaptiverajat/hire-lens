@@ -79,8 +79,8 @@ export function Sidebar({
               className={cn(
                 'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
                 active
-                  ? 'bg-background font-medium text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                  ? 'bg-background font-medium text-foreground shadow-sm hover:bg-blue-200 dark:hover:bg-blue-950/40'
+                  : 'text-muted-foreground hover:bg-blue-200 hover:text-foreground dark:hover:bg-blue-950/40'
               )}
             >
               <Icon className="size-4" aria-hidden />
@@ -98,8 +98,8 @@ export function Sidebar({
                 className={cn(
                   'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
                   EVIDENCE_NAV.some(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
-                    ? 'bg-background font-medium text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                    ? 'bg-background font-medium text-foreground shadow-sm hover:bg-blue-200 dark:hover:bg-blue-950/40'
+                    : 'text-muted-foreground hover:bg-blue-200 hover:text-foreground dark:hover:bg-blue-950/40'
                 )}
               >
                 <LibraryBig className="size-4" aria-hidden />
@@ -115,7 +115,7 @@ export function Sidebar({
                 <DropdownMenuItem
                   key={href}
                   render={<Link href={href} aria-current={active ? 'page' : undefined} />}
-                  className={cn('gap-2 px-2 py-2', active && 'bg-accent font-medium text-accent-foreground')}
+                  className={cn('gap-2 px-2 py-2 focus:bg-blue-200 focus:text-foreground dark:focus:bg-blue-950/40', active && 'bg-accent font-medium text-accent-foreground')}
                 >
                   <Icon className="size-4" aria-hidden />
                   {label}
@@ -135,8 +135,8 @@ export function Sidebar({
               className={cn(
                 'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
                 active
-                  ? 'bg-background font-medium text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                  ? 'bg-background font-medium text-foreground shadow-sm hover:bg-blue-200 dark:hover:bg-blue-950/40'
+                  : 'text-muted-foreground hover:bg-blue-200 hover:text-foreground dark:hover:bg-blue-950/40'
               )}
             >
               <Icon className="size-4" aria-hidden />

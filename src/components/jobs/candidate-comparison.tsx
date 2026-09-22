@@ -66,7 +66,7 @@ export function CandidateComparison({
       <CardHeader>
         <CardTitle>Candidate comparison</CardTitle>
         <CardDescription>
-          {sorted.length} candidates ranked by interview rating then match score.
+          {sorted.length} candidates ranked by interview rating then evidence match.
           Green bars highlight the best score in each column.
         </CardDescription>
       </CardHeader>
@@ -76,7 +76,7 @@ export function CandidateComparison({
             <thead>
               <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="pb-2 pr-4 font-medium">Candidate</th>
-                <th className="pb-2 pr-4 font-medium">Match</th>
+                <th className="pb-2 pr-4 font-medium">Evidence match</th>
                 <th className="pb-2 pr-4 font-medium">Interview</th>
                 <th className="pb-2 pr-4 font-medium">Technical</th>
                 <th className="pb-2 pr-4 font-medium">Communication</th>

@@ -1,4 +1,5 @@
 import type { RedFlagAnalysis, TranscriptEvaluation } from '@/lib/agents/schemas';
+import type { EvidenceItem } from '@/lib/agents/evidence-agent';
 import type { EvidenceClaim } from './contracts';
 
 export interface ValidationIssue {
@@ -127,8 +128,19 @@ export function validateTranscriptEvaluation(
   return issues;
 }
 
-export function validateRedFlags(redFlags: RedFlagAnalysis): ValidationIssue[] {
+export interface RedFlagValidationContext {
+  resume: string;
+  transcript: string;
+  job: string;
+  retrievedEvidence: EvidenceItem[];
+}
+
+export function validateRedFlags(
+  redFlags: RedFlagAnalysis,
+  context?: RedFlagValidationContext,
+): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const validCaseIds = new Set(context?.retrievedEvidence.map((item) => item.ownerId) ?? []);
 
   for (const flag of redFlags.flags) {
     if (flag.evidence.length === 0) {
@@ -137,6 +149,38 @@ export function validateRedFlags(redFlags: RedFlagAnalysis): ValidationIssue[] {
         severity: 'error',
         message: `Red flag ${flag.category} has no supporting evidence.`,
       });
+    }
+    if (flag.retrieved_cases.length === 0) {
+      issues.push({
+        code: 'flag_without_retrieved_case',
+        severity: 'error',
+        message: `Red flag ${flag.category} is not grounded in a retrieved historical case.`,
+      });
+    }
+    if (context) {
+      for (const evidence of flag.evidence) {
+        const source = evidence.source === 'resume'
+          ? context.resume
+          : evidence.source === 'transcript'
+            ? context.transcript
+            : context.job;
+        if (!quoteInSource(evidence.quote, source)) {
+          issues.push({
+            code: 'unsupported_flag_quote',
+            severity: 'error',
+            message: `Red flag ${flag.category} cites a quote not found in ${evidence.source}.`,
+          });
+        }
+      }
+      for (const retrievedCase of flag.retrieved_cases) {
+        if (!validCaseIds.has(retrievedCase.owner_id)) {
+          issues.push({
+            code: 'invalid_retrieved_case',
+            severity: 'error',
+            message: `Red flag ${flag.category} cites a case that was not retrieved: ${retrievedCase.owner_id}.`,
+          });
+        }
+      }
     }
   }
 

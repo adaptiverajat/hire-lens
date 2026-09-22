@@ -3,8 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-/** Match score 0-100. Colour bands are deliberately coarse. */
-export function ScoreBadge({ score, label = 'match' }: { score: number | null; label?: string }) {
+/** Evidence-weighted match score 0-100. Colour bands are deliberately coarse. */
+export function ScoreBadge({ score, label = 'evidence match' }: { score: number | null; label?: string }) {
   if (score === null) {
     return <Badge variant="outline">Not analysed</Badge>;
   }

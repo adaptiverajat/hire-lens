@@ -38,8 +38,8 @@ import {
  * Transcript Review workflow (Features 5 + 6 + 7).
  *
  *   load -> retrieve_evidence -> evaluate_transcript -> persist_evaluation
- *        -> detect_red_flags -> persist_flags -> synthesise_review
- *        -> persist_knowledge
+ *        -> retrieve_flag_evidence -> detect_red_flags -> persist_flags
+ *        -> synthesise_review -> persist_knowledge
  *
  * Nothing here rejects a candidate. The output is a recommendation plus flags,
  * queued for a human to accept or override.
@@ -65,6 +65,7 @@ const State = Annotation.Root({
   matchSummary: Annotation<MatchSummary | null>({ reducer: (_, b) => b, default: () => null }),
 
   evidence: Annotation<EvidenceItem[]>({ reducer: (_, b) => b, default: () => [] }),
+  flagEvidence: Annotation<EvidenceItem[]>({ reducer: (_, b) => b, default: () => [] }),
   evaluationCalibration: Annotation<AgentMemoryNote[]>({ reducer: (_, b) => b, default: () => [] }),
   redFlagCalibration: Annotation<AgentMemoryNote[]>({ reducer: (_, b) => b, default: () => [] }),
   reviewCalibration: Annotation<AgentMemoryNote[]>({ reducer: (_, b) => b, default: () => [] }),
@@ -192,6 +193,7 @@ const graph = new StateGraph(State)
 
   .addNode('retrieve_evidence', async (state) => {
     const evidence = await runEvidenceAgent({
+      purpose: 'interview_evaluation',
       query: [
         `Role: ${state.job!.title}`,
         `Interview assessment for a candidate with skills: ${state.requirements.join(', ')}`,
@@ -199,12 +201,43 @@ const graph = new StateGraph(State)
         state.matchSummary?.summary ?? '',
       ].join('\n'),
       userId: state.userId,
+      jobId: state.jobId,
       excludeCandidateId: state.candidateId,
       ownerTypes: ['knowledge_entry', 'evaluation'],
       limit: 4,
+      pii: {
+        names: [state.candidate!.full_name, ...state.participants],
+        institutions: state.candidate!.structured?.education.map((item) => item.institution),
+      },
     });
 
     return { evidence };
+  })
+
+  .addNode('retrieve_flag_evidence', async (state) => {
+    const flagEvidence = await runEvidenceAgent({
+      purpose: 'red_flag_grounding',
+      query: [
+        `Role: ${state.job!.title}`,
+        `Seniority expected: ${state.job!.seniority ?? 'not specified'}`,
+        `Requirements: ${state.requirements.join(', ')}`,
+        `Resume claims: ${resumeProfileText(state.candidate!.structured)}`,
+        `Transcript evidence: ${state.transcriptText.slice(0, 12000)}`,
+        `Known gaps: ${state.matchSummary?.missing_skills.map((item) => item.skill).join(', ') || 'none'}`,
+      ].join('\n'),
+      userId: state.userId,
+      jobId: state.jobId,
+      excludeCandidateId: state.candidateId,
+      ownerTypes: ['knowledge_entry', 'evaluation'],
+      limit: 6,
+      minSimilarity: 0.12,
+      pii: {
+        names: [state.candidate!.full_name, ...state.participants],
+        institutions: state.candidate!.structured?.education.map((item) => item.institution),
+      },
+    });
+
+    return { flagEvidence };
   })
 
   .addNode('evaluate_transcript', async (state) => {
@@ -314,6 +347,12 @@ const graph = new StateGraph(State)
 
   .addNode('detect_red_flags', async (state) => {
     if (state.redFlagTaskId) await startAgentTask(state.redFlagTaskId);
+    const redFlagValidationContext = {
+      resume: resumeProfileText(state.candidate!.structured),
+      transcript: state.transcriptText,
+      job: `${jobSummary(state.job!)}\n${state.requirements.join(', ')}`,
+      retrievedEvidence: state.flagEvidence,
+    };
     if (state.runId) {
       await recordAgentEvent({
         runId: state.runId,
@@ -339,14 +378,15 @@ const graph = new StateGraph(State)
           candidateHeadline: state.candidate!.headline,
           resumeProfile: resumeProfileText(state.candidate!.structured),
           transcript: state.transcriptText,
+          evidence: state.flagEvidence,
           candidateInstitutions: state.candidate!.structured?.education.map((item) => item.institution),
           calibrationNotes: state.redFlagCalibration,
           feedback: feedback.length > 0 ? feedback.join(' ') : undefined,
         }),
-      validate: (output) => validateRedFlags(output),
+      validate: (output) => validateRedFlags(output, redFlagValidationContext),
     });
 
-    const issues = validateRedFlags(redFlags);
+    const issues = validateRedFlags(redFlags, redFlagValidationContext);
 
     if (state.runId) {
       const artifact = createArtifact({
@@ -357,15 +397,22 @@ const graph = new StateGraph(State)
         producer: 'Red Flag Agent',
         consumer: 'Human Review Agent',
         payload: redFlags,
-        evidence: redFlags.flags.flatMap((flag) =>
-          flag.evidence.map((evidence) => ({
+        evidence: redFlags.flags.flatMap((flag) => [
+          ...flag.evidence.map((evidence) => ({
             sourceType: evidence.source,
             sourceId: state.candidateId,
             quote: evidence.quote,
             claim: flag.reason,
             confidence: flag.confidence,
-          }))
-        ),
+          })),
+          ...flag.retrieved_cases.map((retrievedCase) => ({
+            sourceType: 'knowledge' as const,
+            sourceId: retrievedCase.owner_id,
+            quote: retrievedCase.title,
+            claim: retrievedCase.relevance,
+            confidence: flag.confidence,
+          })),
+        ]),
         warnings: issues.map((issue) => issue.message),
         confidence: redFlags.flags.length
           ? Math.min(...redFlags.flags.map((flag) => flag.confidence))
@@ -429,7 +476,13 @@ const graph = new StateGraph(State)
             level: f.level,
             category: f.category,
             reason: f.reason,
-            evidence: f.evidence,
+            evidence: [
+              ...f.evidence,
+              ...f.retrieved_cases.map((retrievedCase) => ({
+                source: 'retrieved_case',
+                quote: `${retrievedCase.title} [${retrievedCase.owner_id}]: ${retrievedCase.relevance}`,
+              })),
+            ],
             confidence: f.confidence,
             status: f.level === 'GREEN' ? 'resolved' : 'open',
           }))
@@ -598,7 +651,8 @@ const graph = new StateGraph(State)
   .addEdge(START, 'load')
   .addEdge('load', 'retrieve_evidence')
   .addEdge('retrieve_evidence', 'evaluate_transcript')
-  .addEdge('retrieve_evidence', 'detect_red_flags')
+  .addEdge('retrieve_evidence', 'retrieve_flag_evidence')
+  .addEdge('retrieve_flag_evidence', 'detect_red_flags')
   .addEdge('evaluate_transcript', 'persist_evaluation')
   .addEdge(['persist_evaluation', 'detect_red_flags'], 'persist_flags')
   .addEdge('persist_flags', 'synthesise_review')

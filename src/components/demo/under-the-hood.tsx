@@ -282,27 +282,6 @@ export function UnderTheHood() {
     };
   }, [currentJobId, demo.state.jobLogs]);
 
-  // Aggregate token usage across all candidates, grouped by agent.
-  const { tokenByAgentAcrossAll, totalTokensAcrossAllCandidates } = useMemo(() => {
-    const byAgent = new Map<string, { promptTokens: number; completionTokens: number; totalTokens: number }>();
-    let total = 0;
-    for (const entry of [...inferredLogs, ...Object.values(demo.state.jobLogs)]) {
-      for (const a of entry.agents) {
-        if (!a.tokenUsage) continue;
-        const existing = byAgent.get(a.agent);
-        if (existing) {
-          existing.promptTokens += a.tokenUsage.promptTokens;
-          existing.completionTokens += a.tokenUsage.completionTokens;
-          existing.totalTokens += a.tokenUsage.totalTokens;
-        } else {
-          byAgent.set(a.agent, { ...a.tokenUsage });
-        }
-        total += a.tokenUsage.totalTokens;
-      }
-    }
-    return { tokenByAgentAcrossAll: byAgent, totalTokensAcrossAllCandidates: total };
-  }, [demo.state.jobLogs, inferredLogs]);
-
   // Prefer the workflow for the page's current candidate, then any active
   // workflow, then the most recently updated workflow.
   const currentWorkflowEntry = useMemo(() => {
@@ -378,60 +357,6 @@ export function UnderTheHood() {
       {!minimized && (
         <CardContent className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-3">
-            {demo.state.showTokens && <section id="under-the-hood-token-usage" className="lg:col-span-3">
-              <div className="mb-2 flex items-center gap-2">
-                <h3 className="text-sm font-medium">Token usage</h3>
-                <Badge variant="outline" className="text-[10px] font-mono">
-                  {totalTokensAcrossAllCandidates > 0
-                    ? `${totalTokensAcrossAllCandidates.toLocaleString()} total`
-                    : 'no data yet'}
-                </Badge>
-              </div>
-              {tokenByAgentAcrossAll.size > 0 ? (
-                <div className="rounded-md border border-border/60 overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Agent</th>
-                        <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">Prompt</th>
-                        <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">Completion</th>
-                        <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Array.from(tokenByAgentAcrossAll.entries())
-                        .sort((a, b) => b[1].totalTokens - a[1].totalTokens)
-                        .map(([agent, u]) => (
-                          <tr key={agent} className="border-b last:border-0">
-                            <td className="px-3 py-1.5 font-medium">{agent}</td>
-                            <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{u.promptTokens.toLocaleString()}</td>
-                            <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{u.completionTokens.toLocaleString()}</td>
-                            <td className="px-3 py-1.5 text-right font-mono font-semibold">{u.totalTokens.toLocaleString()}</td>
-                          </tr>
-                        ))}
-                      <tr className="bg-muted/30">
-                        <td className="px-3 py-1.5 font-semibold">Total</td>
-                        <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
-                          {Array.from(tokenByAgentAcrossAll.values()).reduce((s, u) => s + u.promptTokens, 0).toLocaleString()}
-                        </td>
-                        <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
-                          {Array.from(tokenByAgentAcrossAll.values()).reduce((s, u) => s + u.completionTokens, 0).toLocaleString()}
-                        </td>
-                        <td className="px-3 py-1.5 text-right font-mono font-bold">
-                          {totalTokensAcrossAllCandidates.toLocaleString()}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground/60">
-                  Token usage will appear here after you run any agent (parse a job description,
-                  parse a resume, analyse a candidate, or evaluate a transcript).
-                </p>
-              )}
-            </section>}
-
             <section id="under-the-hood-current-workflow" className="lg:col-span-3">
               <div className="mb-2 flex items-center gap-2 text-sm font-medium">
                 <Activity className="h-4 w-4" />
@@ -505,20 +430,13 @@ export function UnderTheHood() {
                           <p className="text-xs font-semibold text-foreground">
                             {displayName(entry.name, demo.state.enabled)}
                           </p>
-                          <div className="flex items-center gap-2">
-                            {demo.state.showTokens && entry.agents.some((a) => a.tokenUsage) && (
-                              <span className="font-mono text-[9px] text-muted-foreground/70">
-                                {entry.agents.reduce((sum, a) => sum + (a.tokenUsage?.totalTokens ?? 0), 0).toLocaleString()} tok
-                              </span>
-                            )}
-                            <span className="font-mono text-[9px] text-muted-foreground/60">
-                              {new Date(entry.updatedAt).toLocaleTimeString()}
-                            </span>
-                          </div>
+                          <span className="font-mono text-[9px] text-muted-foreground/60">
+                            {new Date(entry.updatedAt).toLocaleTimeString()}
+                          </span>
                         </div>
                         <ul className="space-y-1">
                           {entry.agents.map((agentLog) => (
-                            <AgentStatusRow key={agentLog.agent} agentLog={agentLog} showTokens={demo.state.showTokens} />
+                            <AgentStatusRow key={agentLog.agent} agentLog={agentLog} />
                           ))}
                         </ul>
                       </div>
@@ -657,7 +575,7 @@ export function UnderTheHood() {
   );
 }
 
-function AgentStatusRow({ agentLog, showTokens }: { agentLog: CandidateAgentLog; showTokens: boolean }) {
+function AgentStatusRow({ agentLog }: { agentLog: CandidateAgentLog }) {
   const icon = agentLog.status === 'running' ? (
     <Loader2 className="h-3 w-3 animate-spin text-amber-500" />
   ) : agentLog.status === 'complete' ? (
@@ -677,11 +595,6 @@ function AgentStatusRow({ agentLog, showTokens }: { agentLog: CandidateAgentLog;
       )}>
         {agentLog.agent}
       </span>
-      {showTokens && agentLog.tokenUsage && (
-        <span className="font-mono text-[9px] text-muted-foreground/70" title={`Prompt: ${agentLog.tokenUsage.promptTokens} · Completion: ${agentLog.tokenUsage.completionTokens}`}>
-          {agentLog.tokenUsage.totalTokens.toLocaleString()} tok
-        </span>
-      )}
       <span className="ml-auto font-mono text-[9px] text-muted-foreground/50">
         {new Date(agentLog.timestamp).toLocaleTimeString()}
       </span>

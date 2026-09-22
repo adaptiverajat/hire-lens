@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { UserPlus } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { maskEmail, maskName } from '@/lib/utils/mask';
 import { getDemoEnabled } from '@/lib/demo/server-store';
@@ -152,7 +153,10 @@ export default async function JobDetailPage({ params }: Props) {
         }
         actions={
           <>
-            <ButtonLink href={`/jobs/${jobId}/candidates/new`}>Add candidate</ButtonLink>
+            <ButtonLink href={`/jobs/${jobId}/candidates/new`}>
+              <UserPlus data-icon="inline-start" aria-hidden />
+              Add candidate
+            </ButtonLink>
             <EditJobDialog
               jobId={jobId}
               title={job.title}
@@ -216,6 +220,7 @@ export default async function JobDetailPage({ params }: Props) {
                       description="Add a candidate and upload their resume. HireLens scores them against this job's requirements and drafts an interview."
                       action={
                         <ButtonLink href={`/jobs/${jobId}/candidates/new`} size="sm">
+                          <UserPlus data-icon="inline-start" aria-hidden />
                           Add candidate
                         </ButtonLink>
                       }
@@ -226,7 +231,7 @@ export default async function JobDetailPage({ params }: Props) {
                         <li key={candidate.id}>
                           <Link
                             href={`/candidates/${candidate.id}`}
-                            className="-mx-2 flex items-center justify-between gap-4 rounded-md px-2 py-3 transition-colors hover:bg-muted/50"
+                            className="-mx-2 flex items-center justify-between gap-4 rounded-md px-2 py-3 transition-colors hover:bg-blue-200 dark:hover:bg-blue-950/40"
                           >
                             <div className="min-w-0">
                               <p className="truncate font-medium">{maskName(candidate.full_name, demo)}</p>

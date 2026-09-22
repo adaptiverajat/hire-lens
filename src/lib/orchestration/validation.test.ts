@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RedFlagAnalysis, TranscriptEvaluation } from '@/lib/agents/schemas';
+import type { EvidenceItem } from '@/lib/agents/evidence-agent';
 import { validateRedFlags, validateTranscriptEvaluation } from './validation';
 
 const evaluation: TranscriptEvaluation = {
@@ -34,10 +35,22 @@ const redFlags: RedFlagAnalysis = {
       level: 'YELLOW',
       reason: 'The dates differ.',
       evidence: [{ source: 'resume', quote: '2019 to 2021' }],
+      retrieved_cases: [{ owner_id: 'case-1', title: 'Timeline discrepancy', relevance: 'A similar date mismatch required follow-up.' }],
       confidence: 0.8,
     },
   ],
 };
+
+const retrievedEvidence: EvidenceItem[] = [{
+  source: 'knowledge_entry',
+  ownerId: 'case-1',
+  similarity: 0.82,
+  content: 'A verified timeline discrepancy required a follow-up interview.',
+  title: 'Timeline discrepancy',
+  outcome: 'hold',
+  retrievalIntent: 'red_flag_grounding',
+  retrievalQuery: 'historical timeline discrepancies',
+}];
 
 describe('orchestration validation', () => {
   it('accepts transcript evidence that appears in the source', () => {
@@ -178,5 +191,30 @@ describe('orchestration validation', () => {
     expect(validateRedFlags({ ...redFlags, flags: [{ ...redFlags.flags[0], evidence: [] }] })).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'flag_without_evidence' })])
     );
+  });
+
+  it('accepts a red flag grounded in source text and a retrieved case', () => {
+    expect(validateRedFlags(redFlags, {
+      resume: 'Employment ran from 2019 to 2021.',
+      transcript: '',
+      job: '',
+      retrievedEvidence,
+    })).toEqual([]);
+  });
+
+  it('rejects a red flag that cites a case the retrieval agent did not return', () => {
+    const unsupported = {
+      ...redFlags,
+      flags: [{
+        ...redFlags.flags[0],
+        retrieved_cases: [{ owner_id: 'invented-case', title: 'Unknown', relevance: 'Not retrieved.' }],
+      }],
+    };
+    expect(validateRedFlags(unsupported, {
+      resume: 'Employment ran from 2019 to 2021.',
+      transcript: '',
+      job: '',
+      retrievedEvidence,
+    })).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'invalid_retrieved_case' })]));
   });
 });

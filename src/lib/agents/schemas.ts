@@ -294,6 +294,13 @@ export const redFlagSchema = z.object({
           quote: z.string(),
         })
       ),
+      retrieved_cases: z.array(
+        z.object({
+          owner_id: z.string(),
+          title: z.string(),
+          relevance: z.string(),
+        })
+      ).min(1).describe('Retrieved historical cases that ground this flag'),
       confidence: z.number().describe('0-1'),
     })
   ),

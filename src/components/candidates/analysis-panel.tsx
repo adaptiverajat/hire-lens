@@ -37,6 +37,9 @@ export function AnalysisPanel({
                     </CardDescription>
                   </div>
                   <div className="text-right">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Evidence match
+                    </p>
                     <p className="text-3xl font-semibold tabular-nums">{analysis.match_score}%</p>
                     {analysis.verdict && (
                       <p className="text-xs text-muted-foreground">

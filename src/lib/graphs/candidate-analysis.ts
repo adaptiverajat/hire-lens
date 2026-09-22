@@ -197,6 +197,7 @@ const graph = new StateGraph(State)
     const candidate = state.candidate!;
 
     const evidence = await runEvidenceAgent({
+      purpose: 'candidate_fit',
       query: [
         `Role: ${job.title}`,
         `Requirements: ${state.jobSkills.map((s) => s.skill).join(', ')}`,
@@ -204,9 +205,14 @@ const graph = new StateGraph(State)
         `Candidate skills: ${state.candidateSkills.map((s) => s.skill).join(', ')}`,
       ].join('\n'),
       userId: state.userId,
+      jobId: state.jobId,
       excludeCandidateId: state.candidateId,
       ownerTypes: ['knowledge_entry', 'evaluation'],
       limit: 4,
+      pii: {
+        names: [candidate.full_name],
+        institutions: candidate.structured?.education.map((item) => item.institution),
+      },
     });
 
     return { evidence };
@@ -253,11 +259,18 @@ const graph = new StateGraph(State)
 
     try {
       const gapEvidence = await runEvidenceAgent({
+        purpose: 'gap_validation',
         query: gapQuery,
+        userId: state.userId,
+        jobId: state.jobId,
         excludeCandidateId: state.candidateId,
         ownerTypes: ['knowledge_entry', 'evaluation'],
         limit: state.analysisDepth === 'deep' ? 6 : 3,
         minSimilarity: 0.15,
+        pii: {
+          names: [state.candidate!.full_name],
+          institutions: state.candidate!.structured?.education.map((item) => item.institution),
+        },
       });
       return { gapEvidence };
     } catch (error) {

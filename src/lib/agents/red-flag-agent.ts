@@ -1,4 +1,5 @@
 import { generateStructured } from '@/lib/ai/structured';
+import { formatEvidence, type EvidenceItem } from '@/lib/agents/evidence-agent';
 import { clampConfidence, redFlagSchema, type RedFlagAnalysis } from '@/lib/agents/schemas';
 import type { AgentMemoryNote } from '@/lib/orchestration/memory';
 
@@ -37,7 +38,9 @@ Levels:
 
 Rules:
 - Every flag requires at least one direct quote in evidence, attributed to its source.
-- If you cannot quote it, do not flag it.
+- Every flag also requires at least one retrieved historical case whose exact ID appears in the supplied cases.
+- Retrieved cases are precedent for why a discrepancy matters; they never replace direct candidate evidence.
+- If you cannot quote the candidate evidence and cite a retrieved case, do not flag it.
 - Do not flag a candidate for being nervous, terse, or for a mis-transcription.
 - Do not flag absence of a skill - that is the gap analysis agent's job, not a red flag.
 - Set the top-level level to the highest severity among your flags, or GREEN if none.
@@ -61,7 +64,11 @@ Profile:
 INTERVIEW TRANSCRIPT
 {transcript}
 
+RETRIEVED, EXPERT-VERIFIED HISTORICAL CASES
+{evidence}
+
 Assess only checkable inconsistencies between the resume claims and the transcript.
+For every flag, cite one or more supplied case IDs in retrieved_cases and explain relevance.
 Do not infer a red flag from another agent's scores or recommendation.{feedback}
 {calibrationNotes}`;
 
@@ -75,6 +82,7 @@ export async function runRedFlagAgent(input: {
   candidateHeadline: string | null;
   resumeProfile: string;
   transcript: string;
+  evidence: EvidenceItem[];
   candidateInstitutions?: string[];
   /** Reflexion feedback from a previous failed validation attempt. */
   feedback?: string;
@@ -100,6 +108,7 @@ export async function runRedFlagAgent(input: {
       candidateHeadline: input.candidateHeadline ?? 'not stated',
       resumeProfile: input.resumeProfile.slice(0, 6000),
       transcript: input.transcript.slice(0, 18000),
+      evidence: formatEvidence(input.evidence),
       feedback: input.feedback
         ? `\n\nVALIDATION FEEDBACK (previous attempt failed):\n${input.feedback}\nPlease correct these issues.`
         : '',
@@ -113,10 +122,16 @@ export async function runRedFlagAgent(input: {
     },
   });
 
-  // Enforce the "must be evidenced" rule mechanically, not just in the prompt.
+  // Enforce candidate evidence and retrieved-case grounding mechanically.
+  const validCaseIds = new Set(input.evidence.map((item) => item.ownerId));
   const flags = (result.flags ?? [])
-    .filter((f) => (f.evidence ?? []).length > 0 && f.reason.trim().length > 0)
-    .map((f) => ({ ...f, confidence: clampConfidence(f.confidence) }));
+    .filter((flag) =>
+      (flag.evidence ?? []).length > 0 &&
+      flag.reason.trim().length > 0 &&
+      flag.retrieved_cases.length > 0 &&
+      flag.retrieved_cases.every((item) => validCaseIds.has(item.owner_id))
+    )
+    .map((flag) => ({ ...flag, confidence: clampConfidence(flag.confidence) }));
 
   const level = highestLevel(flags.map((f) => f.level));
 
