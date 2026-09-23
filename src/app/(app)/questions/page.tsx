@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { maskName } from '@/lib/utils/mask';
+import { maskName, maskText } from '@/lib/utils/mask';
 import { getDemoEnabled } from '@/lib/demo/server-store';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/indicators';
@@ -152,7 +152,9 @@ export default async function QuestionLibraryPage({
             <Card key={q.id} id={`question-card-${q.id}`}>
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <CardTitle className="text-sm font-medium leading-snug">{q.question}</CardTitle>
+                  <CardTitle className="text-sm font-medium leading-snug">
+                    {maskText(q.question, q.candidates?.full_name, demo)}
+                  </CardTitle>
                   <div className="flex shrink-0 flex-wrap gap-1.5">
                     <Badge variant="secondary">{QUESTION_CATEGORY_LABELS[q.category]}</Badge>
                     {q.difficulty && (
@@ -182,13 +184,15 @@ export default async function QuestionLibraryPage({
               {(q.rationale || q.expected_signals.length > 0) && (
                 <CardContent className="space-y-2 pt-0">
                   {q.rationale && (
-                    <p className="text-xs text-muted-foreground">Why: {q.rationale}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Why: {maskText(q.rationale, q.candidates?.full_name, demo)}
+                    </p>
                   )}
                   {q.expected_signals.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {q.expected_signals.map((signal, i) => (
                         <Badge key={i} variant="secondary" className="font-normal">
-                          {signal}
+                          {maskText(signal, q.candidates?.full_name, demo)}
                         </Badge>
                       ))}
                     </div>

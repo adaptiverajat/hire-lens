@@ -1,6 +1,7 @@
 import { EmptyState } from '@/components/shared/indicators';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { maskName, maskText } from '@/lib/utils/mask';
 import {
   QUESTION_CATEGORY_LABELS,
   type QuestionCategory,
@@ -21,7 +22,15 @@ const CATEGORY_HINTS: Record<QuestionCategory, string> = {
   experience_validation: 'Verifies the claimed work is genuinely the candidate\u2019s own.',
 };
 
-export function QuestionsPanel({ sets }: { sets: QuestionSetRow[] }) {
+export function QuestionsPanel({
+  sets,
+  candidateName,
+  demo,
+}: {
+  sets: QuestionSetRow[];
+  candidateName: string;
+  demo: boolean;
+}) {
   if (sets.length === 0) {
     return (
       <EmptyState
@@ -35,7 +44,7 @@ export function QuestionsPanel({ sets }: { sets: QuestionSetRow[] }) {
 
   return (
     <div className="space-y-8">
-      <QuestionSet set={latest} isLatest />
+      <QuestionSet set={latest} isLatest candidateName={candidateName} demo={demo} />
       {previous.length > 0 && (
         <section id="questions-earlier-sets-section">
           <h2 className="mb-3 text-sm font-medium text-muted-foreground">
@@ -43,7 +52,7 @@ export function QuestionsPanel({ sets }: { sets: QuestionSetRow[] }) {
           </h2>
           <div className="space-y-6">
             {previous.map((set) => (
-              <QuestionSet key={set.id} set={set} />
+              <QuestionSet key={set.id} set={set} candidateName={candidateName} demo={demo} />
             ))}
           </div>
         </section>
@@ -52,8 +61,29 @@ export function QuestionsPanel({ sets }: { sets: QuestionSetRow[] }) {
   );
 }
 
-function QuestionSet({ set, isLatest = false }: { set: QuestionSetRow; isLatest?: boolean }) {
+function QuestionSet({
+  set,
+  isLatest = false,
+  candidateName,
+  demo,
+}: {
+  set: QuestionSetRow;
+  isLatest?: boolean;
+  candidateName: string;
+  demo: boolean;
+}) {
   const questions = set.questions ?? [];
+  // Labels are stored as "{candidate name} - {job title}". In demo mode the name
+  // segment is masked outright so any stored form of it (middle names, casing)
+  // is covered, not just an exact full_name match.
+  const separator = ' - ';
+  const sepIndex = set.label.indexOf(separator);
+  const label = !demo
+    ? set.label
+    : sepIndex === -1
+      ? (maskText(set.label, candidateName, true) ?? set.label)
+      : `${maskName(set.label.slice(0, sepIndex), true) ?? ''}${set.label.slice(sepIndex)}`;
+  const notes = maskText(set.notes, candidateName, demo);
 
   const grouped = CATEGORY_ORDER.map((category) => ({
     category,
@@ -67,10 +97,10 @@ function QuestionSet({ set, isLatest = false }: { set: QuestionSetRow; isLatest?
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <CardTitle className="text-base">{set.label}</CardTitle>
+            <CardTitle className="text-base">{label}</CardTitle>
             <CardDescription>
               {questions.length} questions · {new Date(set.created_at).toLocaleString()}
-              {set.notes ? ` · ${set.notes}` : ''}
+              {notes ? ` · ${notes}` : ''}
             </CardDescription>
           </div>
           {isLatest && <Badge>Current</Badge>}
@@ -88,7 +118,7 @@ function QuestionSet({ set, isLatest = false }: { set: QuestionSetRow; isLatest?
                 <li key={q.id} className="rounded-md border p-4">
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-sm font-medium">
-                      {index + 1}. {q.question}
+                      {index + 1}. {maskText(q.question, candidateName, demo)}
                     </p>
                     <div className="flex shrink-0 gap-1.5">
                       {q.difficulty && (
@@ -101,7 +131,9 @@ function QuestionSet({ set, isLatest = false }: { set: QuestionSetRow; isLatest?
                   </div>
 
                   {q.rationale && (
-                    <p className="mt-2 text-xs text-muted-foreground">Why: {q.rationale}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Why: {maskText(q.rationale, candidateName, demo)}
+                    </p>
                   )}
 
                   {q.expected_signals.length > 0 && (
@@ -110,7 +142,7 @@ function QuestionSet({ set, isLatest = false }: { set: QuestionSetRow; isLatest?
                       <div className="flex flex-wrap gap-1">
                         {q.expected_signals.map((signal, i) => (
                           <Badge key={i} variant="secondary" className="font-normal">
-                            {signal}
+                            {maskText(signal, candidateName, demo)}
                           </Badge>
                         ))}
                       </div>

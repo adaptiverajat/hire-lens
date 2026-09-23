@@ -30,6 +30,31 @@ function maskName(value: string | null | undefined, demo = true): string | null 
   return `${first}${middle}${last}`;
 }
 
-export { maskName, toCamelCase };
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function maskText(
+  value: string | null | undefined,
+  name: string | null | undefined,
+  demo = true
+): string | null | undefined {
+  if (!demo || !value || !name) return value;
+  let out = value;
+  const full = name.trim();
+  if (full.length > 2) {
+    out = out.replace(new RegExp(escapeRegExp(full), 'gi'), maskName(full, true) ?? '');
+  }
+  for (const part of full.split(/\s+/)) {
+    if (part.length <= 2) continue;
+    out = out.replace(
+      new RegExp(`\\b${escapeRegExp(part)}\\b`, 'gi'),
+      maskName(part, true) ?? ''
+    );
+  }
+  return out;
+}
+
+export { maskName, maskText, toCamelCase };
 export const maskEmail = mask;
 export const maskPhone = mask;

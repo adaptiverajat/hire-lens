@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { displaySkill } from '@/lib/domain/skills';
+import { ResumeTextCard } from '@/components/candidates/resume-text-card';
 import type { CandidateRow, CandidateSkillRowFull, MatchAnalysisRow } from '@/types/domain';
 
 export function AnalysisPanel({
@@ -11,11 +12,13 @@ export function AnalysisPanel({
   skills,
   analysis,
   jobParsed,
+  demo,
 }: {
   candidate: CandidateRow;
   skills: CandidateSkillRowFull[];
   analysis: MatchAnalysisRow | null;
   jobParsed: boolean;
+  demo: boolean;
 }) {
   const structured = candidate.structured;
 
@@ -283,16 +286,7 @@ export function AnalysisPanel({
         </Card>
 
         {candidate.resume_raw && (
-          <Card id="analysis-resume-text-card">
-            <CardHeader>
-              <CardTitle>Resume text</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="max-h-80 overflow-y-auto whitespace-pre-wrap text-xs text-muted-foreground">
-                {candidate.resume_raw}
-              </p>
-            </CardContent>
-          </Card>
+          <ResumeTextCard resumeRaw={candidate.resume_raw} demo={demo} />
         )}
       </div>
     </div>

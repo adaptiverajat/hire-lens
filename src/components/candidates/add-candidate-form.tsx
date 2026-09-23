@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Sparkles } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiClientError } from '@/lib/api/client';
 import { redactResumePii } from '@/lib/ai/pii';
@@ -11,7 +11,7 @@ import { extractEmailFromText, extractFullNameFromText, extractPhoneFromText } f
 import { toCamelCase } from '@/lib/utils/mask';
 import { DocumentUpload } from '@/components/shared/document-upload';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,6 +31,12 @@ export function AddCandidateForm({ jobId, jobParsed }: { jobId: string; jobParse
   const [runAnalysis, setRunAnalysis] = useState(jobParsed);
   const [pending, setPending] = useState(false);
   const [step, setStep] = useState<string | null>(null);
+  // PII fields stay hidden by default in Demo mode; expandable for verification.
+  const [detailsOpen, setDetailsOpen] = useState(!demo.state.enabled);
+
+  useEffect(() => {
+    if (demo.state.enabled) setDetailsOpen(false);
+  }, [demo.state.enabled]);
 
   const tooShort = (originalResume ?? resume).trim().length < 50;
 
@@ -174,10 +180,26 @@ export function AddCandidateForm({ jobId, jobParsed }: { jobId: string; jobParse
         <CardHeader>
           <CardTitle>Candidate details</CardTitle>
           <CardDescription>
-            Auto-detected from the resume. Edit if needed before saving.
+            {detailsOpen
+              ? 'Auto-detected from the resume. Edit if needed before saving.'
+              : 'Collapsed to protect candidate PII. Expand to verify the auto-detected details.'}
           </CardDescription>
+          <CardAction>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setDetailsOpen((open) => !open)}
+              aria-expanded={detailsOpen}
+              aria-controls="add-candidate-details-body"
+              aria-label={detailsOpen ? 'Collapse candidate details' : 'Expand candidate details'}
+            >
+              {detailsOpen ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
+            </Button>
+          </CardAction>
         </CardHeader>
-        <CardContent className="grid gap-6 sm:grid-cols-3">
+        {detailsOpen && (
+        <CardContent id="add-candidate-details-body" className="grid gap-6 sm:grid-cols-3">
           <div className="space-y-3">
             <Label htmlFor="full_name">Full name</Label>
             <Input
@@ -208,6 +230,7 @@ export function AddCandidateForm({ jobId, jobParsed }: { jobId: string; jobParse
             />
           </div>
         </CardContent>
+        )}
       </Card>
 
       <div className="space-y-4">

@@ -217,11 +217,16 @@ export default async function CandidatePage({ params }: Props) {
             skills={(skills.data ?? []) as CandidateSkillRowFull[]}
             analysis={typedAnalysis}
             jobParsed={typedJob.parse_status === 'complete'}
+            demo={demo}
           />
         </TabsContent>
 
         <TabsContent value="questions" id="candidate-questions-tab" className="mt-6">
-          <QuestionsPanel sets={(questionSets.data ?? []) as QuestionSetRow[]} />
+          <QuestionsPanel
+            sets={(questionSets.data ?? []) as QuestionSetRow[]}
+            candidateName={typedCandidate.full_name}
+            demo={demo}
+          />
         </TabsContent>
 
         <TabsContent value="interviews" id="candidate-interviews-tab" className="mt-6">
