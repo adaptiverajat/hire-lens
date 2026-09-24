@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/shared/indicators';
 import { ButtonLink } from '@/components/shared/button-link';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { QUESTION_CATEGORY_LABELS, type QuestionCategory } from '@/types/domain';
 
 export const metadata = { title: 'Question library - HireLens' };
@@ -40,43 +40,36 @@ export default async function QuestionLibraryPage({
 }) {
   const { category: activeCategory, jobId: activeJobId } = await searchParams;
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const db = createSupabaseAdminClient();
 
-  const demo = await getDemoEnabled();
+  let query = db
+    .from('questions')
+    .select(
+      'id, job_id, candidate_id, category, question, rationale, expected_signals, target_skill, difficulty, source, created_at, candidates(full_name)'
+    )
+    .eq('is_reusable', true)
+    .order('created_at', { ascending: false })
+    .limit(200);
 
-  const { data: jobs } = await db
-    .from('jobs')
-    .select('id, title')
-    .order('created_at', { ascending: false });
-
-  const jobIds = (jobs ?? []).map((j) => j.id);
-  const jobTitles = new Map((jobs ?? []).map((j) => [j.id, j.title as string]));
-
-  let questions: LibraryQuestion[] = [];
-
-  if (jobIds.length > 0) {
-    let query = db
-      .from('questions')
-      .select(
-        'id, job_id, candidate_id, category, question, rationale, expected_signals, target_skill, difficulty, source, created_at, candidates(full_name)'
-      )
-      .in('job_id', activeJobId && jobIds.includes(activeJobId) ? [activeJobId] : jobIds)
-      .eq('is_reusable', true)
-      .order('created_at', { ascending: false })
-      .limit(200);
-
-    if (activeCategory && CATEGORIES.includes(activeCategory as QuestionCategory)) {
-      query = query.eq('category', activeCategory);
-    }
-
-    const { data } = await query;
-    questions = (data ?? []) as unknown as LibraryQuestion[];
+  if (activeJobId) {
+    query = query.eq('job_id', activeJobId);
   }
+  if (activeCategory && CATEGORIES.includes(activeCategory as QuestionCategory)) {
+    query = query.eq('category', activeCategory);
+  }
+
+  const [demo, { data: rawJobs }, { data: questionsData }] = await Promise.all([
+    getDemoEnabled(),
+    db
+      .from('jobs')
+      .select('id, title')
+      .order('created_at', { ascending: false }),
+    query,
+  ]);
+
+  const jobs = (rawJobs ?? []) as Array<{ id: string; title: string }>;
+  const jobTitles = new Map(jobs.map((j) => [j.id, j.title]));
+  const questions = (questionsData ?? []) as unknown as LibraryQuestion[];
 
   const buildHref = (params: Record<string, string | undefined>) => {
     const search = new URLSearchParams();

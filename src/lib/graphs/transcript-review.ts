@@ -30,6 +30,7 @@ import { readAgentMemory, type AgentMemoryNote } from '@/lib/orchestration/memor
 import { withReflexion } from '@/lib/orchestration/reflexion';
 import {
   claimsFromTranscriptEvaluation,
+  sanitizeRedFlags,
   validateRedFlags,
   validateTranscriptEvaluation,
 } from '@/lib/orchestration/validation';
@@ -384,6 +385,7 @@ const graph = new StateGraph(State)
           feedback: feedback.length > 0 ? feedback.join(' ') : undefined,
         }),
       validate: (output) => validateRedFlags(output, redFlagValidationContext),
+      fallback: (output) => sanitizeRedFlags(output, redFlagValidationContext),
     });
 
     const issues = validateRedFlags(redFlags, redFlagValidationContext);

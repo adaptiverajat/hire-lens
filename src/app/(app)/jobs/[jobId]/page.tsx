@@ -14,9 +14,58 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { displaySkill } from '@/lib/domain/skills';
 import type { JdExtraction } from '@/lib/agents/schemas';
+import type { JobRow } from '@/types/domain';
+
+type JobCandidate = {
+  id: string;
+  full_name: string;
+  email: string | null;
+  status: string;
+  parse_status: string | null;
+  total_years_experience: number | null;
+  created_at: string;
+};
+
+type MatchAnalysisItem = {
+  candidate_id: string;
+  match_score: number;
+  verdict: string | null;
+  created_at: string;
+};
+
+type FlagItem = {
+  candidate_id: string;
+  level: string;
+  status: string;
+};
+
+type EvalItem = {
+  candidate_id: string;
+  overall_rating: number;
+  technical_assessment: { score?: number; strengths?: string[]; weaknesses?: string[]; rationale?: string; evidence?: string[] } | null;
+  communication_assessment: { score?: number; clarity_score?: number; articulateness?: string; evidence?: string[] } | null;
+  recommendation: string | null;
+  created_at: string;
+};
+
+type SkillItem = {
+  id: string;
+  skill: string;
+  raw_label: string | null;
+  category: string;
+  importance: number;
+  is_required: boolean;
+  min_years: number | null;
+};
+
+type FeedbackItem = {
+  candidate_id: string;
+  final_decision: string;
+  created_at: string;
+};
 
 type Props = { params: Promise<{ jobId: string }> };
 
@@ -25,24 +74,15 @@ export const dynamic = 'force-dynamic';
 export default async function JobDetailPage({ params }: Props) {
   const { jobId } = await params;
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const db = createSupabaseAdminClient();
 
-  const { data: job } = await db
-    .from('jobs')
-    .select('*')
-    .eq('id', jobId)
-    .maybeSingle();
-
-  if (!job) redirect('/jobs');
-
-  const demo = await getDemoEnabled();
-
-  const [{ data: skills }, { data: candidates }] = await Promise.all([
+  const [demo, { data: rawJob }, { data: rawSkills }, { data: rawCandidates }] = await Promise.all([
+    getDemoEnabled(),
+    db
+      .from('jobs')
+      .select('*')
+      .eq('id', jobId)
+      .maybeSingle(),
     db
       .from('job_skills')
       .select('id, skill, raw_label, category, importance, is_required, min_years')
@@ -55,7 +95,12 @@ export default async function JobDetailPage({ params }: Props) {
       .order('created_at', { ascending: false }),
   ]);
 
-  const candidateIds = (candidates ?? []).map((c) => c.id);
+  const job = rawJob as JobRow | null;
+  if (!job) redirect('/jobs');
+
+  const skills = (rawSkills ?? []) as SkillItem[];
+  const candidates = (rawCandidates ?? []) as JobCandidate[];
+  const candidateIds = candidates.map((c) => c.id);
 
   const scores = new Map<string, number>();
   const verdicts = new Map<string, string>();
@@ -65,7 +110,7 @@ export default async function JobDetailPage({ params }: Props) {
   const decisions = new Map<string, string>();
 
   if (candidateIds.length > 0) {
-    const [{ data: analyses }, { data: flags }, { data: evaluations }, { data: feedback }] = await Promise.all([
+    const [{ data: rawAnalyses }, { data: rawFlags }, { data: rawEvaluations }, { data: rawFeedback }] = await Promise.all([
       db
         .from('match_analyses')
         .select('candidate_id, match_score, verdict, created_at')
@@ -87,6 +132,11 @@ export default async function JobDetailPage({ params }: Props) {
         .in('candidate_id', candidateIds)
         .order('created_at', { ascending: false }),
     ]);
+
+    const analyses = (rawAnalyses ?? []) as MatchAnalysisItem[];
+    const flags = (rawFlags ?? []) as FlagItem[];
+    const evaluations = (rawEvaluations ?? []) as EvalItem[];
+    const feedback = (rawFeedback ?? []) as FeedbackItem[];
 
     for (const a of analyses ?? []) {
       if (!scores.has(a.candidate_id)) {

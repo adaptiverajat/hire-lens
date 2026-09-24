@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { publicEnv, serverEnv } from '@/lib/env';
 
 /**
@@ -33,12 +33,23 @@ export async function createSupabaseServerClient() {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cachedAdminClient: SupabaseClient<any, 'public', any> | null = null;
+
 /**
  * Service-role client. Bypasses RLS, so every query made with it MUST be
  * explicitly scoped to the authenticated user (see `withAuth` in lib/api).
+ * Caches a singleton to reuse HTTP connections across queries.
  */
 export function createSupabaseAdminClient() {
-  return createClient(publicEnv.NEXT_PUBLIC_SUPABASE_URL, serverEnv().SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  if (!cachedAdminClient) {
+    cachedAdminClient = createClient(
+      publicEnv.NEXT_PUBLIC_SUPABASE_URL,
+      serverEnv().SUPABASE_SERVICE_ROLE_KEY,
+      {
+        auth: { persistSession: false, autoRefreshToken: false },
+      }
+    );
+  }
+  return cachedAdminClient;
 }

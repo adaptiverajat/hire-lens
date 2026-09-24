@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/indicators';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { RECOMMENDATION_LABELS } from '@/types/domain';
 
 export const metadata = { title: 'Transcripts - HireLens' };
@@ -30,18 +30,27 @@ interface InterviewWithTranscript {
 }
 
 export default async function TranscriptsPage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const db = createSupabaseAdminClient();
 
-  const demo = await getDemoEnabled();
+  const [demo, { data: rawJobs }, { data: interviews }, { data: rawEvaluations }] = await Promise.all([
+    getDemoEnabled(),
+    db.from('jobs').select('id, title'),
+    db
+      .from('interviews')
+      .select(
+        'id, round, stage, status, created_at, interviewer_name, job_id, candidate_id, candidates(full_name), transcripts(id, source, word_count, participants, created_at)'
+      )
+      .order('created_at', { ascending: false }),
+    db
+      .from('evaluations')
+      .select('id, transcript_id, overall_rating, recommendation'),
+  ]);
 
-  const { data: jobs } = await db.from('jobs').select('id, title');
-  const jobIds = (jobs ?? []).map((j) => j.id);
-  const jobTitles = new Map((jobs ?? []).map((j) => [j.id, j.title as string]));
+  const jobs = (rawJobs ?? []) as Array<{ id: string; title: string }>;
+  const evaluations = (rawEvaluations ?? []) as Array<{ id: string; transcript_id: string; overall_rating: number; recommendation: string | null }>;
+
+  const jobIds = jobs.map((j) => j.id);
+  const jobTitles = new Map(jobs.map((j) => [j.id, j.title]));
 
   if (jobIds.length === 0) {
     return (
@@ -54,20 +63,6 @@ export default async function TranscriptsPage() {
       </>
     );
   }
-
-  const [{ data: interviews }, { data: evaluations }] = await Promise.all([
-    db
-      .from('interviews')
-      .select(
-        'id, round, stage, status, created_at, interviewer_name, job_id, candidate_id, candidates(full_name), transcripts(id, source, word_count, participants, created_at)'
-      )
-      .in('job_id', jobIds)
-      .order('created_at', { ascending: false }),
-    db
-      .from('evaluations')
-      .select('id, transcript_id, overall_rating, recommendation')
-      .in('job_id', jobIds),
-  ]);
 
   const typed = (interviews ?? []) as unknown as InterviewWithTranscript[];
   const evalByTranscript = new Map(

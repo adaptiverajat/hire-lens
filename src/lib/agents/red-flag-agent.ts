@@ -38,6 +38,7 @@ Levels:
 
 Rules:
 - Every flag requires at least one direct quote in evidence, attributed to its source.
+- Quotes must be copied verbatim from the supplied resume or transcript. Do not paraphrase, translate, correct grammar, or abbreviate with ellipses.
 - Every flag also requires at least one retrieved historical case whose exact ID appears in the supplied cases.
 - Retrieved cases are precedent for why a discrepancy matters; they never replace direct candidate evidence.
 - If you cannot quote the candidate evidence and cite a retrieved case, do not flag it.

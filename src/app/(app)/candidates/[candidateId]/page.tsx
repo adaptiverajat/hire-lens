@@ -6,6 +6,7 @@ import { getDemoEnabled } from '@/lib/demo/server-store';
 import { PageHeader } from '@/components/shared/page-header';
 import { ScoreBadge, StatusBadge } from '@/components/shared/indicators';
 import { CandidateActions } from '@/components/candidates/candidate-actions';
+import { EditCandidateDialog } from '@/components/candidates/edit-candidate-dialog';
 import { CandidateExport } from '@/components/candidates/candidate-export';
 import { AnalysisPanel } from '@/components/candidates/analysis-panel';
 import { QuestionsPanel } from '@/components/candidates/questions-panel';
@@ -14,7 +15,7 @@ import { ReviewPanel } from '@/components/candidates/review-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import type {
   CandidateRow,
   CandidateSkillRowFull,
@@ -34,19 +35,15 @@ export const dynamic = 'force-dynamic';
 export default async function CandidatePage({ params }: Props) {
   const { candidateId } = await params;
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const db = createSupabaseAdminClient();
 
-  const { data: candidate } = await db
+  const { data: rawCandidate } = await db
     .from('candidates')
     .select('*')
     .eq('id', candidateId)
     .maybeSingle();
 
+  const candidate = rawCandidate as CandidateRow | null;
   if (!candidate) redirect('/candidates');
 
   // Shared workspace — any authenticated user can access any job.
@@ -139,13 +136,23 @@ export default async function CandidatePage({ params }: Props) {
             .join(' · ') || undefined
         }
         actions={
-          <CandidateActions
-            candidateId={candidateId}
-            candidateName={typedCandidate.full_name}
-            parseStatus={typedCandidate.parse_status}
-            jobParsed={typedJob.parse_status === 'complete'}
-            hasAnalysis={Boolean(typedAnalysis)}
-          />
+          <>
+            <EditCandidateDialog
+              candidateId={candidateId}
+              fullName={typedCandidate.full_name}
+              headline={typedCandidate.headline}
+              email={typedCandidate.email}
+              phone={typedCandidate.phone}
+              location={typedCandidate.location}
+            />
+            <CandidateActions
+              candidateId={candidateId}
+              candidateName={typedCandidate.full_name}
+              parseStatus={typedCandidate.parse_status}
+              jobParsed={typedJob.parse_status === 'complete'}
+              hasAnalysis={Boolean(typedAnalysis)}
+            />
+          </>
         }
       />
 
@@ -232,7 +239,7 @@ export default async function CandidatePage({ params }: Props) {
         <TabsContent value="interviews" id="candidate-interviews-tab" className="mt-6">
           <InterviewsPanel
             candidateId={candidateId}
-            candidateName={candidate.full_name}
+            candidateName={typedCandidate.full_name}
             interviews={(interviews.data ?? []) as InterviewRow[]}
             evaluations={typedEvaluations}
             demo={demo}

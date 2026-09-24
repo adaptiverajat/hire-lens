@@ -201,6 +201,42 @@ export function validateRedFlags(
   return issues;
 }
 
+/**
+ * Drops every red flag that fails grounding (missing/unverifiable quotes,
+ * missing or invalid retrieved cases, empty reason) and recomputes the
+ * top-level severity. Used as the reflexion fallback so a partially valid
+ * result is returned instead of failing the whole run.
+ */
+export function sanitizeRedFlags(
+  redFlags: RedFlagAnalysis,
+  context: RedFlagValidationContext,
+): RedFlagAnalysis {
+  const validCaseIds = new Set(context.retrievedEvidence.map((item) => item.ownerId));
+
+  const flags = redFlags.flags.filter((flag) => {
+    if (flag.evidence.length === 0 || flag.retrieved_cases.length === 0) return false;
+    if (!flag.reason.trim()) return false;
+    if (!flag.retrieved_cases.every((item) => validCaseIds.has(item.owner_id))) return false;
+    return flag.evidence.every((evidence) => {
+      const source =
+        evidence.source === 'resume'
+          ? context.resume
+          : evidence.source === 'transcript'
+            ? context.transcript
+            : context.job;
+      return quoteInSource(evidence.quote, source);
+    });
+  });
+
+  const level = flags.some((flag) => flag.level === 'RED')
+    ? ('RED' as const)
+    : flags.some((flag) => flag.level === 'YELLOW')
+      ? ('YELLOW' as const)
+      : ('GREEN' as const);
+
+  return { ...redFlags, level, flags };
+}
+
 export function claimsFromTranscriptEvaluation(
   evaluation: TranscriptEvaluation,
   sourceId: string,

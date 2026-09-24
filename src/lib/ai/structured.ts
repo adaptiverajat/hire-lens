@@ -41,8 +41,15 @@ export async function generateStructured<T extends z.ZodType>({
     demo?.enabled && demo.prompts[activeRun]?.user ? demo.prompts[activeRun].user : user;
   const safeInput = sanitizeLlmInput(input, pii);
 
+  // A demo prompt override can drop the {currentDate} placeholder, which makes
+  // the model fall back to its training cutoff for date reasoning. Anchor every
+  // system prompt to today when the placeholder is absent.
+  const anchoredSystem = resolvedSystem.includes('{currentDate}')
+    ? resolvedSystem
+    : `${resolvedSystem}\n\nToday's date is ${new Date().toISOString().split('T')[0]}. Use this as the reference for any timeline or date-based analysis.`;
+
   const prompt = ChatPromptTemplate.fromMessages([
-    ['system', redactPii(resolvedSystem, pii)],
+    ['system', redactPii(anchoredSystem, pii)],
     ['human', redactPii(resolvedUser, pii)],
   ]);
 

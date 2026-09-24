@@ -7,38 +7,49 @@ import { EmptyState, StatCard, StatusBadge } from '@/components/shared/indicator
 import { ButtonLink } from '@/components/shared/button-link';
 import { AddCandidateDialog } from '@/components/candidates/add-candidate-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
+
+type DashboardJob = {
+  id: string;
+  title: string;
+  status: string;
+  priority: string | null;
+  department: string | null;
+  location: string | null;
+  created_at: string;
+};
+
+type DashboardCandidate = {
+  id: string;
+  full_name: string;
+  status: string;
+  job_id: string;
+  created_at: string;
+};
 
 export const metadata = { title: 'Dashboard - HireLens' };
 
 export default async function DashboardPage() {
-  const demo = await getDemoEnabled();
-  const supabase = await createSupabaseServerClient();
-  await supabase.auth.getUser();
-
   const db = createSupabaseAdminClient();
-  const { data: jobs } = await db
-    .from('jobs')
-    .select('id, title, status, priority, department, location, created_at')
-    .order('created_at', { ascending: false });
 
-  const jobRows = jobs ?? [];
-  const jobIds = jobRows.map((job) => job.id);
-  const { data: candidates } = jobIds.length
-    ? await db
+  const [demo, { data: jobs }, { data: candidates }, { count: interviewsEvaluated }] =
+    await Promise.all([
+      getDemoEnabled(),
+      db
+        .from('jobs')
+        .select('id, title, status, priority, department, location, created_at')
+        .order('created_at', { ascending: false }),
+      db
         .from('candidates')
-        .select('id, full_name, status, job_id, created_at')
-        .in('job_id', jobIds)
-    : { data: [] as Array<{ id: string; full_name: string; status: string; job_id: string; created_at: string }> };
-  const candidateRows = candidates ?? [];
-
-  const candidateIds = candidateRows.map((candidate) => candidate.id);
-  const { count: interviewsEvaluated } = candidateIds.length
-    ? await db
+        .select('id, full_name, status, job_id, created_at'),
+      db
         .from('evaluations')
-        .select('id', { count: 'exact', head: true })
-        .in('candidate_id', candidateIds)
-    : { count: 0 };
+        .select('id', { count: 'exact', head: true }),
+    ]);
+
+  const jobRows = (jobs ?? []) as DashboardJob[];
+  const jobIds = new Set(jobRows.map((job) => job.id));
+  const candidateRows = ((candidates ?? []) as DashboardCandidate[]).filter((c) => jobIds.has(c.job_id));
 
   const candidatesByJob = new Map<string, typeof candidateRows>();
   for (const candidate of candidateRows) {

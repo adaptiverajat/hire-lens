@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { Cpu, DollarSign, Gauge, Layers } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
 import { ProfileForm } from '@/components/settings/profile-form';
@@ -42,28 +43,38 @@ function formatUsd(value: number) {
 }
 
 export default async function SettingsPage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const h = await headers();
+  const userId = h.get('x-user-id');
+  const userEmail = h.get('x-user-email');
+
+  let user: { id: string; email?: string } | null = userId ? { id: userId, email: userEmail ?? '' } : null;
+  if (!user) {
+    const supabase = await createSupabaseServerClient();
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  }
 
   const db = createSupabaseAdminClient();
-  const demo = await getDemoEnabled();
   const { OPENAI_CHAT_MODEL, OPENAI_FAST_MODEL } = serverEnv();
 
   const [
-    { data: profile },
+    demo,
+    { data: rawProfile },
     { count: vectorCount },
     { count: runCount },
     { data: tokenRuns },
-    { data: candidates },
+    { data: rawCandidates },
   ] = await Promise.all([
+    getDemoEnabled(),
     db.from('users').select('full_name, role, created_at').eq('id', user!.id).maybeSingle(),
     db.from('embeddings').select('id', { count: 'exact', head: true }),
     db.from('agent_runs').select('id', { count: 'exact', head: true }),
-    db.from('agent_runs').select('started_at, candidate_id, output').order('started_at', { ascending: false }),
+    db.from('agent_runs').select('started_at, candidate_id, output').order('started_at', { ascending: false }).limit(200),
     db.from('candidates').select('id, full_name'),
   ]);
+
+  const profile = rawProfile as { full_name: string | null; role: string; created_at: string } | null;
+  const candidates = (rawCandidates ?? []) as Array<{ id: string; full_name: string }>;
 
   type RunRow = {
     started_at: string;
@@ -125,8 +136,6 @@ export default async function SettingsPage() {
     ['Fast model', process.env.OPENAI_FAST_MODEL ?? 'gpt-4.1-mini'],
     ['Embedding model', process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small'],
     ['Vector dimensions', '1536'],
-    ['LangSmith tracing', process.env.LANGSMITH_TRACING === 'true' ? 'Enabled' : 'Disabled'],
-    ['LangSmith project', process.env.LANGSMITH_PROJECT ?? 'hirelens'],
   ] as const;
 
   return (

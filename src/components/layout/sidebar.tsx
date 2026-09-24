@@ -75,6 +75,7 @@ export function Sidebar({
             <Link
               key={href}
               href={href}
+              prefetch={false}
               aria-current={active ? 'page' : undefined}
               className={cn(
                 'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
@@ -114,7 +115,7 @@ export function Sidebar({
               return (
                 <DropdownMenuItem
                   key={href}
-                  render={<Link href={href} aria-current={active ? 'page' : undefined} />}
+                  render={<Link href={href} prefetch={false} aria-current={active ? 'page' : undefined} />}
                   className={cn('gap-2 px-2 py-2 focus:bg-blue-200 focus:text-foreground dark:focus:bg-blue-950/40', active && 'bg-accent font-medium text-accent-foreground')}
                 >
                   <Icon className="size-4" aria-hidden />
@@ -131,6 +132,7 @@ export function Sidebar({
             <Link
               key={href}
               href={href}
+              prefetch={false}
               aria-current={active ? 'page' : undefined}
               className={cn(
                 'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',

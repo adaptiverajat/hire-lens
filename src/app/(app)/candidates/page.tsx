@@ -3,40 +3,56 @@ import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/indicators';
 import { ButtonLink } from '@/components/shared/button-link';
 import { AddCandidateDialog } from '@/components/candidates/add-candidate-dialog';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { CandidatesListWithExport } from '@/components/candidates/post-interview-export';
 import type { EvaluationRow, FeedbackRow, FlagRowFull, InterviewRow } from '@/types/domain';
+
+type CandidateListItem = {
+  id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  location: string | null;
+  headline: string | null;
+  status: string;
+  job_id: string;
+  total_years_experience: number | null;
+  created_at: string;
+};
+
+type JobListItem = {
+  id: string;
+  title: string;
+  status: string;
+  department: string | null;
+  location: string | null;
+  created_at: string;
+};
 
 export const metadata = { title: 'Candidates - HireLens' };
 export const dynamic = 'force-dynamic';
 
 export default async function CandidatesPage() {
-  const demo = await getDemoEnabled();
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const db = createSupabaseAdminClient();
-  const userId = user!.id;
 
-  const { data: jobs } = await db
-    .from('jobs')
-    .select('id, title, status, department, location, created_at')
-    .order('created_at', { ascending: false });
+  const [demo, { data: rawJobs }, { data: rawCandidates }] = await Promise.all([
+    getDemoEnabled(),
+    db
+      .from('jobs')
+      .select('id, title, status, department, location, created_at')
+      .order('created_at', { ascending: false }),
+    db
+      .from('candidates')
+      .select('id, full_name, email, phone, location, headline, status, job_id, total_years_experience, created_at')
+      .order('created_at', { ascending: false }),
+  ]);
 
-  const jobIds = (jobs ?? []).map((j) => j.id);
+  const jobs = (rawJobs ?? []) as JobListItem[];
+  const candidates = (rawCandidates ?? []) as CandidateListItem[];
 
-  const { data: candidates } = jobIds.length
-    ? await db
-        .from('candidates')
-        .select('id, full_name, email, phone, location, headline, status, job_id, total_years_experience, created_at')
-        .in('job_id', jobIds)
-        .order('created_at', { ascending: false })
-    : { data: [] as Array<{ id: string; full_name: string; email: string | null; phone: string | null; location: string | null; headline: string | null; status: string; job_id: string; total_years_experience: number | null; created_at: string }> };
+  const jobIds = jobs.map((j) => j.id);
 
-  const candidateIds = (candidates ?? []).map((c) => c.id);
+  const candidateIds = candidates.map((c) => c.id);
 
   // Fetch interviews (with transcripts), evaluations, flags, and feedback
   // to determine which candidates have been interviewed and build the export data.

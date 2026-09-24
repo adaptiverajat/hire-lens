@@ -1,16 +1,11 @@
 import { PageHeader } from '@/components/shared/page-header';
 import { KnowledgeExplorer } from '@/components/knowledge/knowledge-explorer';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import type { KnowledgeEntryRow } from '@/types/domain';
 
 export const metadata = { title: 'Knowledge base - HireLens' };
 
 export default async function KnowledgePage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const db = createSupabaseAdminClient();
 
   const [{ data: entries }, { data: jobs }, { count: vectorCount }] = await Promise.all([

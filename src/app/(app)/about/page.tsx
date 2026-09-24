@@ -340,7 +340,6 @@ export default function AboutPage() {
                 <li>LangGraph state-machine workflows</li>
                 <li>OpenAI structured outputs and privacy-filtered embeddings</li>
                 <li>Central PII sanitisation before model-provider boundaries</li>
-                <li>LangSmith tracing of already-sanitised model calls</li>
                 <li>Workflow run logging plus durable transcript tasks and artifacts</li>
                 <li>Reflexion retry loops with validation feedback</li>
                 <li>Shared agent memory (calibration store)</li>

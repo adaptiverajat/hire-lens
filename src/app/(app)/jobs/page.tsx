@@ -3,27 +3,35 @@ import { Briefcase } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState, StatusBadge } from '@/components/shared/indicators';
 import { ButtonLink } from '@/components/shared/button-link';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
+
+type JobsPageJob = {
+  id: string;
+  title: string;
+  department: string | null;
+  location: string | null;
+  status: string;
+  seniority: string | null;
+  deadline_date: string | null;
+  created_at: string;
+};
 
 export const metadata = { title: 'Jobs - HireLens' };
 export const dynamic = 'force-dynamic';
 
 export default async function JobsPage() {
-  const supabase = await createSupabaseServerClient();
-  await supabase.auth.getUser();
-
   const db = createSupabaseAdminClient();
 
-  const { data: jobs } = await db
-    .from('jobs')
-    .select('id, title, department, location, status, seniority, deadline_date, created_at')
-    .order('created_at', { ascending: false });
+  const [{ data: rawJobs }, { data: rawCandidates }] = await Promise.all([
+    db
+      .from('jobs')
+      .select('id, title, department, location, status, seniority, deadline_date, created_at')
+      .order('created_at', { ascending: false }),
+    db.from('candidates').select('id, job_id'),
+  ]);
 
-  const jobIds = (jobs ?? []).map((j) => j.id);
-
-  const { data: candidates } = jobIds.length
-    ? await db.from('candidates').select('id, job_id').in('job_id', jobIds)
-    : { data: [] as Array<{ id: string; job_id: string }> };
+  const jobs = (rawJobs ?? []) as JobsPageJob[];
+  const candidates = (rawCandidates ?? []) as Array<{ id: string; job_id: string }>;
 
   const countByJob = new Map<string, number>();
   for (const c of candidates ?? []) {

@@ -7,7 +7,7 @@ import { ButtonLink } from '@/components/shared/button-link';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { FLAG_CATEGORY_LABELS } from '@/types/domain';
 
 export const metadata = { title: 'Review queue - HireLens' };
@@ -34,36 +34,27 @@ export default async function ReviewQueuePage({
   const { status } = await searchParams;
   const activeStatus = status ?? 'open';
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const db = createSupabaseAdminClient();
 
-  const demo = await getDemoEnabled();
+  let query = db
+    .from('flags')
+    .select(
+      'id, job_id, candidate_id, level, category, reason, evidence, confidence, status, created_at, candidates(full_name, status)'
+    )
+    .order('created_at', { ascending: false })
+    .limit(200);
 
-  const { data: jobs } = await db.from('jobs').select('id, title');
-  const jobIds = (jobs ?? []).map((j) => j.id);
-  const jobTitles = new Map((jobs ?? []).map((j) => [j.id, j.title as string]));
+  if (activeStatus !== 'all') query = query.eq('status', activeStatus);
 
-  let flags: QueueFlag[] = [];
+  const [demo, { data: rawJobs }, { data }] = await Promise.all([
+    getDemoEnabled(),
+    db.from('jobs').select('id, title'),
+    query,
+  ]);
 
-  if (jobIds.length > 0) {
-    let query = db
-      .from('flags')
-      .select(
-        'id, job_id, candidate_id, level, category, reason, evidence, confidence, status, created_at, candidates(full_name, status)'
-      )
-      .in('job_id', jobIds)
-      .order('created_at', { ascending: false })
-      .limit(200);
-
-    if (activeStatus !== 'all') query = query.eq('status', activeStatus);
-
-    const { data } = await query;
-    flags = (data ?? []) as unknown as QueueFlag[];
-  }
+  const jobs = (rawJobs ?? []) as Array<{ id: string; title: string }>;
+  const jobTitles = new Map(jobs.map((j) => [j.id, j.title]));
+  const flags = (data ?? []) as unknown as QueueFlag[];
 
   // RED first, then YELLOW, then GREEN.
   const severity = { RED: 0, YELLOW: 1, GREEN: 2 } as const;
