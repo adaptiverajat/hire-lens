@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus, Sparkles } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiClientError } from '@/lib/api/client';
 import { redactPii } from '@/lib/ai/pii';
@@ -60,6 +60,8 @@ export function InterviewsPanel({
   const [transcriptSource, setTranscriptSource] = useState<string>('teams');
   const [busy, setBusy] = useState<string | null>(null);
 
+  const nextRound = Math.max(0, ...interviews.map((interview) => interview.round)) + 1;
+
   const evaluationByTranscript = new Map(evaluations.map((e) => [e.transcript_id, e]));
 
   const refresh = () => startTransition(() => router.refresh());
@@ -69,7 +71,7 @@ export function InterviewsPanel({
     try {
       await api.post(`/candidates/${candidateId}/interviews`, {
         stage,
-        round: interviews.length + 1,
+        round: nextRound,
         interviewer_name: interviewer.trim() || null,
       });
       toast.success('Interview added');
@@ -116,6 +118,27 @@ export function InterviewsPanel({
       refresh();
     } catch (error) {
       toast.error(error instanceof ApiClientError ? error.message : 'Evaluation failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function deleteInterview(interview: InterviewRow) {
+    if (
+      !window.confirm(
+        `Delete interview round ${interview.round}? Its transcript, evaluation, flags, and interview assessment knowledge will also be permanently removed. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setBusy(`delete-${interview.id}`);
+    try {
+      await api.delete(`/interviews/${interview.id}`);
+      toast.success(`Interview round ${interview.round} deleted`);
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof ApiClientError ? error.message : 'Could not delete the interview round');
     } finally {
       setBusy(null);
     }
@@ -171,7 +194,7 @@ export function InterviewsPanel({
             <div className="flex gap-2">
               <Button onClick={createInterview} disabled={busy === 'create'}>
                 {busy === 'create' && <Loader2 className="animate-spin" aria-hidden />}
-                Add round {interviews.length + 1}
+                Add round {nextRound}
               </Button>
               <Button variant="ghost" onClick={() => setCreating(false)}>
                 Cancel
@@ -204,9 +227,26 @@ export function InterviewsPanel({
                     {new Date(interview.created_at).toLocaleDateString()}
                   </CardDescription>
                 </div>
-                <Badge variant={interview.status === 'completed' ? 'default' : 'secondary'}>
-                  {interview.status}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={interview.status === 'completed' ? 'default' : 'secondary'}>
+                    {interview.status}
+                  </Badge>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    aria-label={`Delete interview round ${interview.round}`}
+                    title={`Delete interview round ${interview.round}`}
+                    disabled={busy !== null}
+                    onClick={() => deleteInterview(interview)}
+                  >
+                    {busy === `delete-${interview.id}` ? (
+                      <Loader2 className="animate-spin" aria-hidden />
+                    ) : (
+                      <Trash2 aria-hidden />
+                    )}
+                  </Button>
+                </div>
               </div>
             </CardHeader>
 

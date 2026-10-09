@@ -9,6 +9,17 @@ function normaliseWhitespace(text: string): string {
     .trim();
 }
 
+// Timestamps are metadata when they occur as a transcript-line prefix, not
+// spoken content. Keep numeric values elsewhere (dates, metrics, versions).
+const TIMESTAMP_PREFIX = /^\s*\[?\s*(?:(?:\d{1,2}:)?\d{1,2}:\d{2})(?:[.,]\d{1,3})?\s*\]?\s*(?:[-–—|]\s*)?/;
+const IDENTIFIER_ONLY = /^(?:[0-9a-f]{8}-[0-9a-f-]{27,}|[0-9a-f]{24,})$/i;
+
+function stripLineMetadata(line: string): string {
+  if (/^(?:WEBVTT\b|NOTE\b)/i.test(line.trim()) || VTT_TIMING.test(line.trim())) return '';
+  const withoutTimestamp = line.replace(TIMESTAMP_PREFIX, '').trim();
+  return IDENTIFIER_ONLY.test(withoutTimestamp) ? '' : withoutTimestamp;
+}
+
 export interface TranscriptTurn {
   speaker: string;
   text: string;
@@ -28,8 +39,8 @@ const VTT_TIMING = /^(\d{2}:)?\d{2}:\d{2}[.,]\d{3}\s*-->\s*(\d{2}:)?\d{2}:\d{2}[
 // Teams inline speaker tag: <v Jane Doe>Hello there</v>
 const VTT_VOICE = /<v\s+([^>]+)>([\s\S]*?)<\/v>/i;
 
-// "Jane Doe: Hello there" or "[00:12] Jane Doe: Hello there"
-const SPEAKER_PREFIX = /^\s*(?:\[?(\d{1,2}:\d{2}(?::\d{2})?)\]?\s+)?([A-Z][\w.'-]*(?:\s+[A-Z][\w.'-]*){0,3})\s*:\s*(.+)$/;
+// "Jane Doe: Hello there" or "[00:12.400] Jane Doe: Hello there"
+const SPEAKER_PREFIX = /^\s*(?:\[?((?:(?:\d{1,2}:)?\d{1,2}:\d{2})(?:[.,]\d{1,3})?)\]?\s+)?([A-Z][\w.'-]*(?:\s+[A-Z][\w.'-]*){0,3})\s*:\s*(.+)$/;
 
 function stripTags(value: string) {
   return value.replace(/<[^>]+>/g, '').trim();
@@ -53,12 +64,12 @@ export function parseTranscript(raw: string): ParsedTranscript {
 
   const normalisedText = merged.length
     ? merged.map((t) => `${t.speaker}: ${t.text}`).join('\n\n')
-    : text;
+    : text.split('\n').map(stripLineMetadata).filter(Boolean).join('\n');
 
   return {
     turns: merged,
     participants,
-    wordCount: text.split(/\s+/).filter(Boolean).length,
+    wordCount: normalisedText.split(/\s+/).filter(Boolean).length,
     normalisedText,
   };
 }
@@ -116,20 +127,24 @@ function parsePlainText(text: string): TranscriptTurn[] {
   const turns: TranscriptTurn[] = [];
 
   for (const line of text.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
+    const original = line.trim();
+    if (!original) continue;
 
-    const match = trimmed.match(SPEAKER_PREFIX);
+    const match = original.match(SPEAKER_PREFIX);
     if (match) {
       turns.push({
         speaker: match[2].trim(),
         text: match[3].trim(),
         timestamp: match[1],
       });
-    } else if (turns.length > 0) {
-      turns[turns.length - 1].text += ` ${trimmed}`;
     } else {
-      turns.push({ speaker: 'Unknown', text: trimmed });
+      const trimmed = stripLineMetadata(original);
+      if (!trimmed) continue;
+      if (turns.length > 0) {
+        turns[turns.length - 1].text += ` ${trimmed}`;
+      } else {
+        turns.push({ speaker: 'Unknown', text: trimmed });
+      }
     }
   }
 

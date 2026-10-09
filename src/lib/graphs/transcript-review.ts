@@ -14,6 +14,7 @@ import { resumeProfileText } from '@/lib/domain/format';
 import { indexDocument } from '@/lib/ai/vector-store';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { ApiError, notFound } from '@/lib/api/handler';
+import { parseTranscript } from '@/lib/documents/transcript';
 import {
   completeAgentTask,
   createAgentTask,
@@ -166,6 +167,10 @@ const graph = new StateGraph(State)
     if (!rawText?.trim()) {
       throw new ApiError(422, 'Transcript is empty.');
     }
+    const transcriptText = parseTranscript(rawText).normalisedText;
+    if (!transcriptText.trim()) {
+      throw new ApiError(422, 'Transcript contains no usable speech after removing metadata.');
+    }
 
     // Fetch calibration notes from shared agent memory for each agent that
     // will run in this workflow. Notes are scoped to the job when possible.
@@ -181,7 +186,7 @@ const graph = new StateGraph(State)
       interviewId: interview.id,
       job: job.data as JobRecord,
       candidate: candidate.data as CandidateRecord,
-      transcriptText: rawText,
+      transcriptText,
       participants: ((transcript as Record<string, unknown>).participants as string[]) ?? [],
       plannedQuestions: (questions.data ?? []) as PlannedQuestion[],
       requirements: (jobSkills.data ?? []).map((s: { skill: string }) => s.skill),
